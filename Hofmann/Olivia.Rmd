@@ -24,14 +24,14 @@ Some questions that the stakeholder would like answered are:
 All of these questions are critical because the answers will help the property developer asses the risk and potential returns on his investment. Data needed to complete this analysis includes COVID-19 data for the state of Texas, COVID-19 date for the entire United States, and COVID-19 mobility data for the world. While these datasets seem broad, each dataset contains necessary features to conduct this analysis, which will be revealed further in the report. By understanding how different counties fared during the pandemic, the developer can make an informed decision regarding where he wants to build, ensuring that the chosen location offers stability and growth potential, even during unforeseen circumstances.
 
 ## Data Preparation
-```{r install packages, echo = FALSE, message = FALSE, warning = FALSE}
-# Load the libraries.
-library(dplyr)
-library(tidyr)
-library(knitr)
-library(kableExtra)
-library(factoextra)
-library(ggplot2)
+```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
+# Suppress all messages and load the libraries.
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(ggplot2))
 ```
 
 ```{r load data, echo = FALSE}
@@ -369,13 +369,14 @@ clustering <- wealthincomecluster %>%
          norm_income_200000_or_more)
 ```
 
-```{r k-means clustering display, echo = FALSE}
+```{r k-means clustering display, echo = FALSE, fig.width = 6, fig.height = 4, fig.align = 'center', fig.cap = "K-Means Clustering, Wealth and Income"}
 # Perform k-means clustering with a chosen number of clusters
 set.seed(123)
 kmeans_result <- kmeans(clustering, centers = 3)
 
 # Visualize k-means clusters
-# fviz_cluster(kmeans_result, data = clustering)
+fviz_cluster(kmeans_result, data = clustering) +
+  labs(title = NULL) # Remove the title
 
 # Add the cluster assignments to the original dataset
 wealthincomeclusterkmean <- wealthincomecluster
@@ -389,9 +390,118 @@ county_clusters <- data.frame(county_name = wealthincomeclusterkmean$county_name
 # head(county_clusters)
 ```
 
-```{r number of clusters, echo = FALSE}
+```{r number of clusters, echo = FALSE, fig.width = 6, fig.height = 4, fig.align = 'center', fig.cap = "K-Means Optimal Number of Clusters"}
 # Use the Elbow method to determine the optimal number of clusters
-fviz_nbclust(clustering, kmeans, method = "wss")
+fviz_nbclust(clustering, kmeans, method = "wss") +
+  labs(title = NULL) # Remove the title
+```
+
+```{r basic statistics normalized, echo = FALSE}
+# Calculate basic statistics
+statstable <- wealthincomecluster %>%
+  summarise(
+    mean_median_income = mean(median_income, na.rm = TRUE),
+    sd_median_income = sd(median_income, na.rm = TRUE),
+    min_median_income = min(median_income, na.rm = TRUE),
+    max_median_income = max(median_income, na.rm = TRUE),
+    
+    mean_income_per_capita = mean(income_per_capita, na.rm = TRUE),
+    sd_income_per_capita = sd(income_per_capita, na.rm = TRUE),
+    min_income_per_capita = min(income_per_capita, na.rm = TRUE),
+    max_income_per_capita = max(income_per_capita, na.rm = TRUE),
+    
+    mean_rent_over_50_percent = mean(norm_rent_over_50_percent, na.rm = TRUE),
+    sd_rent_over_50_percent = sd(norm_rent_over_50_percent, na.rm = TRUE),
+    min_rent_over_50_percent = min(norm_rent_over_50_percent, na.rm = TRUE),
+    max_rent_over_50_percent = max(norm_rent_over_50_percent, na.rm = TRUE),
+    
+    mean_rent_30_to_35_percent = mean(norm_rent_30_to_35_percent, na.rm = TRUE),
+    sd_rent_30_to_35_percent = sd(norm_rent_30_to_35_percent, na.rm = TRUE),
+    min_rent_30_to_35_percent = min(norm_rent_30_to_35_percent, na.rm = TRUE),
+    max_rent_30_to_35_percent = max(norm_rent_30_to_35_percent, na.rm = TRUE),
+    
+    mean_income_less_10000 = mean(norm_income_less_10000, na.rm = TRUE),
+    sd_income_less_10000 = sd(norm_income_less_10000, na.rm = TRUE),
+    min_income_less_10000 = min(norm_income_less_10000, na.rm = TRUE),
+    max_income_less_10000 = max(norm_income_less_10000, na.rm = TRUE),
+    
+    mean_income_50000_59999 = mean(norm_income_50000_59999, na.rm = TRUE),
+    sd_income_50000_59999 = sd(norm_income_50000_59999, na.rm = TRUE),
+    min_income_50000_59999 = min(norm_income_50000_59999, na.rm = TRUE),
+    max_income_50000_59999 = max(norm_income_50000_59999, na.rm = TRUE),
+    
+    mean_income_100000_124999 = mean(norm_income_100000_124999, na.rm = TRUE),
+    sd_income_100000_124999 = sd(norm_income_100000_124999, na.rm = TRUE),
+    min_income_100000_124999 = min(norm_income_100000_124999, na.rm = TRUE),
+    max_income_100000_124999 = max(norm_income_100000_124999, na.rm = TRUE),
+    
+    mean_total_pop = mean(total_pop, na.rm = TRUE),
+    sd_total_pop = sd(total_pop, na.rm = TRUE),
+    min_total_pop = min(total_pop, na.rm = TRUE),
+    max_total_pop = max(total_pop, na.rm = TRUE)
+  )
+
+# Prepare a summary table with descriptions and formatting for non-scientific notation and 4 decimal places
+statstable_final <- data.frame(
+  Feature = c(
+    "median_income",
+    "income_per_capita",
+    "rent_over_50_percent",
+    "rent_30_to_35_percent",
+    "income_less_10000",	
+    "income_50000_59999", 
+    "income_100000_124999", 
+    "total_pop"
+  ),
+  Mean = format(c(
+    statstable$mean_median_income,
+    statstable$mean_income_per_capita,
+    statstable$mean_rent_over_50_percent,
+    statstable$mean_rent_30_to_35_percent,
+    statstable$mean_income_less_10000,
+    statstable$mean_income_50000_59999,
+    statstable$mean_income_100000_124999,
+    statstable$mean_total_pop
+  ), scientific = FALSE, nsmall = 4),
+  
+  Std_Dev = format(c(
+    statstable$sd_median_income,
+    statstable$sd_income_per_capita,
+    statstable$sd_rent_over_50_percent,
+    statstable$sd_rent_30_to_35_percent,
+    statstable$sd_income_less_10000,
+    statstable$sd_income_50000_59999,
+    statstable$sd_income_100000_124999,
+    statstable$sd_total_pop
+  ), scientific = FALSE, nsmall = 4),
+  
+  Min = format(c(
+    statstable$min_median_income,
+    statstable$min_income_per_capita,
+    statstable$min_rent_over_50_percent,
+    statstable$min_rent_30_to_35_percent,
+    statstable$min_income_less_10000,
+    statstable$min_income_50000_59999,
+    statstable$min_income_100000_124999,
+    statstable$min_total_pop
+  ), scientific = FALSE, nsmall = 4),
+  
+  Max = format(c(
+    statstable$max_median_income,
+    statstable$max_income_per_capita,
+    statstable$max_rent_over_50_percent,
+    statstable$max_rent_30_to_35_percent,
+    statstable$max_income_less_10000,
+    statstable$max_income_50000_59999,
+    statstable$max_income_100000_124999,
+    statstable$max_total_pop
+  ), scientific = FALSE, nsmall = 4)
+)
+
+# Output the table
+kable(statstable_final, format = "markdown", caption = "Table of Features and Basic Statistics, Normalized") %>% 
+  kable_styling(full_width = FALSE, font_size = 8.5)
+
 ```
 
 ```{r summary table cluster 1, echo = FALSE}
