@@ -1,0 +1,596 @@
+---
+title: "Olivia's Portion: Project 2"
+author: "Olivia Hofmann"
+date: "2024-10-23"
+output: pdf_document
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Business Understanding
+
+COVID-19 is a highly contagious respiratory illness that first emerged in Wuhan, China in December 2019. COVID-19 entered the United States in January 2020 with the World Health Organization (WHO) declaring COVID-19 a “global health emergency” in March 2020. The virus spreads through respiratory droplets dispersed when someone coughs, sneezes, or even talks. COVID-19 can cause symptoms including those similar to a cold, influenza, or pneumonia with the potential to become very severe and lead to death. The COVID-19 virus overwhelmed healthcare systems and disrupted economies around the world. [1] [2]
+
+The stakeholder for this data analysis is a property developer who is interested in determining the best location in Texas for developing a mixed-use building. The stakeholder’s key concern is selecting a county that demonstrates stability and resilience in response to unpredictable events, like the COVID-19 pandemic. The mixed-use building that the stakeholder is looking to develop will have space for a gym, restaurants, pharmacy, and other similar businesses. When deciding where to build this mixed-use building, the stakeholder is looking for insights into which counties in Texas have successfully managed public health crises as situations similar to this would greatly impact the success of the businesses within his building. Every business that would be in the mixed-use building would be heavily reliant on consistent traffic and economic activity. Any change in foot traffic and economic activity would directly impact the success or failure of each business. The analysis will include data on COVID-19 cases, COVID-19 deaths, and the effectiveness of government interventions (such as lock downs and social distancing). This analysis is crucial for the stakeholder to make an informed decision regarding this long-term investment, as counties that respond well to crises are more likely to provide stable environments for growth and development.
+
+Some questions that the stakeholder would like answered are:
+
+ - What are the characteristics of counties in Texas that showed resilience during the COVID-19 pandemic, based on COVID-19 case rates?
+ - What are the economic and social impacts in counties that were more or less affected by the pandemic and how might these influence future development potential?
+ - How did COVID-19 impact the workplace and employment rates in the various counties?
+ - Which counties showed consistent consumer foot traffic during the pandemic, indicating stable economic activity?
+
+All of these questions are critical because the answers will help the property developer asses the risk and potential returns on his investment. Data needed to complete this analysis includes COVID-19 data for the state of Texas, COVID-19 date for the entire United States, and COVID-19 mobility data for the world. While these datasets seem broad, each dataset contains necessary features to conduct this analysis, which will be revealed further in the report. By understanding how different counties fared during the pandemic, the developer can make an informed decision regarding where he wants to build, ensuring that the chosen location offers stability and growth potential, even during unforeseen circumstances.
+
+## Data Preparation
+```{r install packages, echo = FALSE, message = FALSE, warning = FALSE}
+# Load the libraries.
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+library(factoextra)
+library(ggplot2)
+```
+
+```{r load data, echo = FALSE}
+# Load the dataset.
+dataframe <- read.csv("COVID-19_cases_plus_census.csv")
+
+# Filter the dataset for the counties in Texas.
+datatexas <- dataframe %>% 
+  filter(state == "TX")
+
+# Only select the desired columns relating to wealth and income. 
+wealthincomedata <- datatexas %>% 
+  select(county_name,
+         confirmed_cases,
+         deaths,
+         total_pop,
+         median_income,
+         income_per_capita,
+         rent_burden_not_computed,
+         rent_over_50_percent,
+         rent_40_to_50_percent, 
+         rent_35_to_40_percent,
+         rent_30_to_35_percent,
+         rent_25_to_30_percent, 
+         rent_20_to_25_percent,
+         rent_15_to_20_percent,
+         rent_10_to_15_percent, 
+         rent_under_10_percent,
+         income_less_10000,	
+         income_10000_14999, 
+         income_15000_19999,
+         income_20000_24999, 
+         income_25000_29999, 
+         income_30000_34999, 
+         income_35000_39999, 
+         income_40000_44999, 
+         income_45000_49999, 
+         income_50000_59999, 
+         income_60000_74999, 
+         income_75000_99999, 
+         income_100000_124999, 
+         income_125000_149999, 
+         income_150000_199999, 
+         income_200000_or_more)
+```
+
+### Objects to Cluster
+The objects to be clustered in this analysis are the counties in Texas. To identify which counties demonstrated resilience during the COVID-19 pandemic, income and rent burden metrics will be analyzed alongside general population data. Some key features for clustering include median income, income per capita, rent burden levels, and the distribution of income across different brackets. These factors provide a comprehensive picture of each county’s economic resilience and ability to maintain stability during times of crisis.
+
+By examining income distribution and wealth concentration, we can determine which counties have strong economic foundations. This, in combination with COVID-19 case and death data, will guide the stakeholder in making an informed decision on where to invest in developing a mixed-use building. Counties that managed to sustain consumer traffic and economic activity during the pandemic will likely offer more stability and growth potential for future business ventures.
+
+### Features for Clustering
+The features analyzed for clustering relate to the category of income and wealth, which are critical for understanding economic resilience. These features include income brackets, median income per capita, rent burden percentages, and population statistics. Each of these features play a significant role in assessing to what capacity the county can withstand a widespread challenge such as the COVID-19 pandemic. 
+
+  - **Income Levels:** The distribution of households across various income levels can provide insight into a county's overall economic health and resilience.
+  - **Rent Burden:** High rent burden percentages indicate financial strain on households, which can affect their ability to manage crises effectively.
+  - **Median Income and Income per Capita:** These metrics serve as broad indicators of wealth within a county. Wealthier counties typically have more resources to navigate economic shocks and support their communities during difficult times.
+  - **Population:** Including population statistics allows for a more accurate interpretation of COVID-19 impacts by normalizing the number of cases and deaths based on county size.
+
+By clustering counties based on these features, we can identify different income and wealth profiles that may correlate with their resilience during the pandemic. This analysis will enhance our understanding of which counties were better equipped to handle the economic and social disruptions caused by COVID-19, ultimately aiding the stakeholder in making informed investment decisions.
+
+### Table of Features and Basic Statistics
+```{r basic statistics, echo = FALSE}
+# Calculate basic statistics
+statstable <- wealthincomedata %>%
+  summarise(
+    mean_median_income = mean(median_income, na.rm = TRUE),
+    sd_median_income = sd(median_income, na.rm = TRUE),
+    min_median_income = min(median_income, na.rm = TRUE),
+    max_median_income = max(median_income, na.rm = TRUE),
+    
+    mean_income_per_capita = mean(income_per_capita, na.rm = TRUE),
+    sd_income_per_capita = sd(income_per_capita, na.rm = TRUE),
+    min_income_per_capita = min(income_per_capita, na.rm = TRUE),
+    max_income_per_capita = max(income_per_capita, na.rm = TRUE),
+    
+    mean_rent_over_50_percent = mean(rent_over_50_percent, na.rm = TRUE),
+    sd_rent_over_50_percent = sd(rent_over_50_percent, na.rm = TRUE),
+    min_rent_over_50_percent = min(rent_over_50_percent, na.rm = TRUE),
+    max_rent_over_50_percent = max(rent_over_50_percent, na.rm = TRUE),
+    
+    mean_rent_30_to_35_percent = mean(rent_30_to_35_percent, na.rm = TRUE),
+    sd_rent_30_to_35_percent = sd(rent_30_to_35_percent, na.rm = TRUE),
+    min_rent_30_to_35_percent = min(rent_30_to_35_percent, na.rm = TRUE),
+    max_rent_30_to_35_percent = max(rent_30_to_35_percent, na.rm = TRUE),
+    
+    mean_income_less_10000 = mean(income_less_10000, na.rm = TRUE),
+    sd_income_less_10000 = sd(income_less_10000, na.rm = TRUE),
+    min_income_less_10000 = min(income_less_10000, na.rm = TRUE),
+    max_income_less_10000 = max(income_less_10000, na.rm = TRUE),
+    
+    mean_income_50000_59999 = mean(income_50000_59999, na.rm = TRUE),
+    sd_income_50000_59999 = sd(income_50000_59999, na.rm = TRUE),
+    min_income_50000_59999 = min(income_50000_59999, na.rm = TRUE),
+    max_income_50000_59999 = max(income_50000_59999, na.rm = TRUE),
+    
+    mean_income_100000_124999 = mean(income_100000_124999, na.rm = TRUE),
+    sd_income_100000_124999 = sd(income_100000_124999, na.rm = TRUE),
+    min_income_100000_124999 = min(income_100000_124999, na.rm = TRUE),
+    max_income_100000_124999 = max(income_100000_124999, na.rm = TRUE),
+    
+    mean_total_pop = mean(total_pop, na.rm = TRUE),
+    sd_total_pop = sd(total_pop, na.rm = TRUE),
+    min_total_pop = min(total_pop, na.rm = TRUE),
+    max_total_pop = max(total_pop, na.rm = TRUE)
+  )
+
+# Prepare a summary table with descriptions
+statstable_final <- data.frame(
+  Feature = c(
+    "median_income",
+    "income_per_capita",
+    "rent_over_50_percent",
+    "rent_30_to_35_percent",
+    "income_less_10000",	
+    "income_50000_59999", 
+    "income_100000_124999", 
+    "total_pop"
+  ),
+  Description = c(
+    "Median income in the county (USD)",
+    "Per capita income in the county (USD)",
+    "Households with rent > 50% of income (%)",
+    "Households with rent 30-35% of income (%)",
+    "Households earning <$10,000 (%)",
+    "Households earning $50,000-$59,999 (%)",
+    "Households earning $100,000-$124,999 (%)",
+    "Total population of the county"
+  ),
+  Mean = c(
+    statstable$mean_median_income,
+    statstable$mean_income_per_capita,
+    statstable$mean_rent_over_50_percent,
+    statstable$mean_rent_30_to_35_percent,
+    statstable$mean_income_less_10000,
+    statstable$mean_income_50000_59999,
+    statstable$mean_income_100000_124999,
+    statstable$mean_total_pop
+  ),
+  Std_Dev = c(
+    statstable$sd_median_income,
+    statstable$sd_income_per_capita,
+    statstable$sd_rent_over_50_percent,
+    statstable$sd_rent_30_to_35_percent,
+    statstable$sd_income_less_10000,
+    statstable$sd_income_50000_59999,
+    statstable$sd_income_100000_124999,
+    statstable$sd_total_pop
+  ),
+  Min = c(
+    statstable$min_median_income,
+    statstable$min_income_per_capita,
+    statstable$min_rent_over_50_percent,
+    statstable$min_rent_30_to_35_percent,
+    statstable$min_income_less_10000,
+    statstable$min_income_50000_59999,
+    statstable$min_income_100000_124999,
+    statstable$min_total_pop
+  ),
+  Max = c(
+    statstable$max_median_income,
+    statstable$max_income_per_capita,
+    statstable$max_rent_over_50_percent,
+    statstable$max_rent_30_to_35_percent,
+    statstable$max_income_less_10000,
+    statstable$max_income_50000_59999,
+    statstable$max_income_100000_124999,
+    statstable$max_total_pop
+  )
+)
+
+# Output the table
+kable(statstable_final, format = "markdown", caption = "Table of Features and Basic Statistics") %>% 
+  kable_styling(full_width = FALSE, font_size = 8.5)
+
+```
+
+Because there are a lot of features that represent the wealth and income category, the basic statistics were done on a subset of the data. Features were chosen that represent the most critical dimensions of income distribution and rent burden, while avoiding overly granular breakdowns. This selection captures the distribution of wealth (from low to high incomes), general population data, and rent burden, which are the most relevant features for analyzing the economic stability of a county.
+
+  - **Median Income:** This gives a central measure of income distribution in a county.
+  - **Income per Capita:** Shows wealth distribution on a per-person basis, which complements median income.
+  - **Rent Over 50 Percent:** This is a key indicator of severe rent burden, which can signify economic strain in a county.
+  - **Rent 30 to 35 Percent:** This provides a threshold of moderate rent burden.
+  - **Income $50,000 - $59,999:** This is a middle-income bracket and can act as a proxy for general economic health.
+  - **Income $100,000 - $124,999:** A higher income bracket that helps assess the presence of wealthier households.
+  - **Income Less than $10,000:** Reflects the population in extreme poverty, which is crucial for understanding economic vulnerability.
+  
+### Scale of Measurement
+
+All of the features listed below are ratio scales because they have a true zero point (e.g., zero income, zero population) and allow for meaningful arithmetic operations (e.g., calculating differences, ratios).
+
+```{r scale of measurement, echo = FALSE}
+# Create a data frame with your features and descriptions
+features_data <- data.frame(
+  Feature = c(
+    "median_income",
+    "income_per_capita",
+    "rent_over_50_percent",
+    "rent_30_to_35_percent",
+    "income_less_10000",
+    "income_50000_59999",
+    "income_100000_124999",
+    "total_pop"
+  ),
+  Scale_of_Measurement = c(
+    "Ratio",
+    "Ratio",
+    "Ratio",
+    "Ratio",
+    "Ratio",
+    "Ratio",
+    "Ratio",
+    "Ratio"
+  ),
+  Description = c(
+    "Measures income in dollars. Has a true zero (no income).",
+    "Measures income per person. Has a true zero.",
+    "Number of households paying more than 50% of income in rent.",
+    "Number of households paying between 30-35% of income in rent.",
+    "Number of households earning less than $10,000.",
+    "Number of households earning between $50,000 and $59,999.",
+    "Number of households earning between $100,000 and $124,999.",
+    "Total population count, which has a true zero (no population)."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Output the table
+kable(features_data, format = "markdown", caption = "Scale of Measurement of Features and Descriptions") %>% 
+  kable_styling(full_width = FALSE, font_size = 8.5)
+```
+
+### Measures for Similarity/Distance
+
+For clustering analysis, various measures of similarity or distance can be employed based on the features used. The following measures are particularly relevant:
+
+  - **Euclidean Distance:** This is the most widely used distance measure, calculated as the straight-line distance between points in a multi-dimensional space. It is especially effective for continuous numerical data such as income or population figures, where the relationships between data points can be interpreted geometrically. Euclidean distance captures the direct linear relationship between observations, making it intuitive and straightforward for visualizing proximity in clustering contexts. [3]
+  - **Manhattan Distance:** This measure calculates the distance between two points by summing the absolute differences of their coordinates. Manhattan distance is useful when dealing with outliers or when the scale of measurement varies among features. It reflects a grid-like path, which can be advantageous in scenarios where a more robust metric against extreme values is required. In urban environments, for example, it mirrors the layout of streets. [4]
+  - **Standardization/Normalization:** When features exhibit wide ranges, normalizing the data before applying distance measures is beneficial. This ensures that each feature contributes equally to the distance calculation, preventing features with larger scales from disproportionately influencing results. [5]
+
+In this analysis, a combination of standardized/normalized distance and Euclidean distance will be utilized. The data will first be normalized to ensure that each feature contributes equally to the distance calculation. The choice of Euclidean distance is justified by its prevalence and effectiveness for income and population data, which typically exhibit continuous numerical characteristics. It provides a clear and meaningful way to measure similarity between counties based on economic and demographic factors.
+
+## Modeling
+### Normalization
+Normalization is essential for standardizing features on a similar scale, enabling meaningful comparisons across variables and preventing features with larger ranges or counts from dominating the analysis—especially in clustering algorithms. Given the wide range of values in the dataset, it was necessary to normalize the numerical features before proceeding with clustering or further analysis.
+
+The normalization was based on the total population of each county, and for each numerical column, a corresponding normalized column was created. A new dataset was then constructed, retaining either the normalized or original version of each feature, depending on its relevance. The following features were kept as not normalized:
+
+  - **county_name:** A categorical variable representing the county's name. Since normalization is typically applied to numerical data, this feature was excluded from the process.
+  - **total_pop:** This variable was used as the basis for normalization. Normalizing it would not be meaningful as it serves as the denominator for other variables.
+  - **median_income:** Already an average measure of income at the county level, this feature did not require normalization because it provides a direct summary of income status rather than a count or proportion.
+  - **income_per_capita:** Similar to median income, this statistic reflects income averaged per individual and does not need normalization, as it is already scaled relative to the population.
+
+```{r normalization, echo = FALSE}
+# Normalize the numeric columns in wealthincomedata based on total_pop
+dataplusnormalization <- wealthincomedata %>%
+  mutate(across(-county_name, ~ . / total_pop, .names = "norm_{.col}"))
+
+# View the first few rows of the normalized data
+# head(dataplusnormalization)
+
+# Reduce dataset with normalization to only be the necessary normalization columns for clustering.
+wealthincomecluster <- dataplusnormalization %>% 
+  select(county_name,
+         norm_confirmed_cases,
+         norm_deaths,
+         total_pop,
+         median_income,
+         income_per_capita,
+         norm_rent_burden_not_computed,
+         norm_rent_over_50_percent,
+         norm_rent_40_to_50_percent, 
+         norm_rent_35_to_40_percent,
+         norm_rent_30_to_35_percent,
+         norm_rent_25_to_30_percent, 
+         norm_rent_20_to_25_percent,
+         norm_rent_15_to_20_percent,
+         norm_rent_10_to_15_percent, 
+         norm_rent_under_10_percent,
+         norm_income_less_10000,	
+         norm_income_10000_14999, 
+         norm_income_15000_19999,
+         norm_income_20000_24999, 
+         norm_income_25000_29999, 
+         norm_income_30000_34999, 
+         norm_income_35000_39999, 
+         norm_income_40000_44999, 
+         norm_income_45000_49999, 
+         norm_income_50000_59999, 
+         norm_income_60000_74999, 
+         norm_income_75000_99999, 
+         norm_income_100000_124999, 
+         norm_income_125000_149999, 
+         norm_income_150000_199999, 
+         norm_income_200000_or_more)
+
+# View the first few rows of the normalized data
+# head(wealthincomecluster)
+```
+
+### Cluster Analysis
+#### K-Means Clustering
+```{r k-means clustering, echo = FALSE}
+# Select the columns to cluster.
+clustering <- wealthincomecluster %>% 
+  select(norm_confirmed_cases,
+         norm_deaths,
+         median_income,
+         income_per_capita,
+         norm_rent_burden_not_computed,
+         norm_rent_over_50_percent,
+         norm_rent_40_to_50_percent, 
+         norm_rent_35_to_40_percent,
+         norm_rent_30_to_35_percent,
+         norm_rent_25_to_30_percent, 
+         norm_rent_20_to_25_percent,
+         norm_rent_15_to_20_percent,
+         norm_rent_10_to_15_percent, 
+         norm_rent_under_10_percent,
+         norm_income_less_10000,	
+         norm_income_10000_14999, 
+         norm_income_15000_19999,
+         norm_income_20000_24999, 
+         norm_income_25000_29999, 
+         norm_income_30000_34999, 
+         norm_income_35000_39999, 
+         norm_income_40000_44999, 
+         norm_income_45000_49999, 
+         norm_income_50000_59999, 
+         norm_income_60000_74999, 
+         norm_income_75000_99999, 
+         norm_income_100000_124999, 
+         norm_income_125000_149999, 
+         norm_income_150000_199999, 
+         norm_income_200000_or_more)
+```
+
+```{r k-means clustering display, echo = FALSE}
+# Perform k-means clustering with a chosen number of clusters
+set.seed(123)
+kmeans_result <- kmeans(clustering, centers = 3)
+
+# Visualize k-means clusters
+# fviz_cluster(kmeans_result, data = clustering)
+
+# Add the cluster assignments to the original dataset
+wealthincomeclusterkmean <- wealthincomecluster
+wealthincomeclusterkmean$cluster <- kmeans_result$cluster
+
+# Display counties and their cluster assignments
+county_clusters <- data.frame(county_name = wealthincomeclusterkmean$county_name, 
+                              cluster = wealthincomeclusterkmean$cluster)
+
+# View the first few rows
+# head(county_clusters)
+```
+
+```{r number of clusters, echo = FALSE}
+# Use the Elbow method to determine the optimal number of clusters
+fviz_nbclust(clustering, kmeans, method = "wss")
+```
+
+```{r summary table cluster 1, echo = FALSE}
+# Filter data for cluster 1
+cluster1 <- wealthincomeclusterkmean %>% 
+  filter(cluster == "1")
+
+# Get the numeric columns in cluster 1
+numeric_cols <- cluster1 %>% select(where(is.numeric))
+
+# Initialize an empty data frame to store the results
+summary_df <- data.frame(Feature = character(),
+                         Mean = numeric(),
+                         SD = numeric(),
+                         Min = numeric(),
+                         Max = numeric(),
+                         stringsAsFactors = FALSE)
+
+# Loop over each column and calculate the summary statistics
+for (colname in colnames(numeric_cols)) {
+  # Calculate summary statistics
+  mean_val <- mean(numeric_cols[[colname]], na.rm = TRUE)
+  sd_val <- sd(numeric_cols[[colname]], na.rm = TRUE)
+  min_val <- min(numeric_cols[[colname]], na.rm = TRUE)
+  max_val <- max(numeric_cols[[colname]], na.rm = TRUE)
+  
+  # Round values to 4 decimal places
+  mean_val <- round(mean_val, 4)
+  sd_val <- round(sd_val, 4)
+  min_val <- round(min_val, 4)
+  max_val <- round(max_val, 4)
+  
+  # Create a new row and append it to summary_df
+  summary_df <- rbind(summary_df, 
+                      data.frame(Feature = colname,
+                                 Mean = format(mean_val, nsmall = 4, scientific = FALSE),
+                                 SD = format(sd_val, nsmall = 4, scientific = FALSE),
+                                 Min = format(min_val, nsmall = 4, scientific = FALSE),
+                                 Max = format(max_val, nsmall = 4, scientific = FALSE)))
+}
+
+# Display the summary table
+library(knitr)
+kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
+      caption = "Summary Statistics for Cluster 1") %>%
+  kable_styling(full_width = FALSE)
+```
+
+```{r summary table cluster 2, echo = FALSE}
+# Filter data for cluster 2
+cluster2 <- wealthincomeclusterkmean %>% 
+  filter(cluster == "2")
+
+# Get the numeric columns in cluster 2
+numeric_cols <- cluster2 %>% select(where(is.numeric))
+
+# Initialize an empty data frame to store the results
+summary_df <- data.frame(Feature = character(),
+                         Mean = numeric(),
+                         SD = numeric(),
+                         Min = numeric(),
+                         Max = numeric(),
+                         stringsAsFactors = FALSE)
+
+# Loop over each column and calculate the summary statistics
+for (colname in colnames(numeric_cols)) {
+  # Calculate summary statistics
+  mean_val <- mean(numeric_cols[[colname]], na.rm = TRUE)
+  sd_val <- sd(numeric_cols[[colname]], na.rm = TRUE)
+  min_val <- min(numeric_cols[[colname]], na.rm = TRUE)
+  max_val <- max(numeric_cols[[colname]], na.rm = TRUE)
+  
+  # Round values to 4 decimal places
+  mean_val <- round(mean_val, 4)
+  sd_val <- round(sd_val, 4)
+  min_val <- round(min_val, 4)
+  max_val <- round(max_val, 4)
+  
+  # Create a new row and append it to summary_df
+  summary_df <- rbind(summary_df, 
+                      data.frame(Feature = colname,
+                                 Mean = format(mean_val, nsmall = 4, scientific = FALSE),
+                                 SD = format(sd_val, nsmall = 4, scientific = FALSE),
+                                 Min = format(min_val, nsmall = 4, scientific = FALSE),
+                                 Max = format(max_val, nsmall = 4, scientific = FALSE)))
+}
+
+# Display the summary table
+library(knitr)
+kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
+      caption = "Summary Statistics for Cluster 2") %>%
+  kable_styling(full_width = FALSE)
+```
+
+```{r summary table cluster 3, echo = FALSE}
+# Filter data for cluster 3
+cluster3 <- wealthincomeclusterkmean %>% 
+  filter(cluster == "3")
+
+# Get the numeric columns in cluster 3
+numeric_cols <- cluster3 %>% select(where(is.numeric))
+
+# Initialize an empty data frame to store the results
+summary_df <- data.frame(Feature = character(),
+                         Mean = numeric(),
+                         SD = numeric(),
+                         Min = numeric(),
+                         Max = numeric(),
+                         stringsAsFactors = FALSE)
+
+# Loop over each column and calculate the summary statistics
+for (colname in colnames(numeric_cols)) {
+  # Calculate summary statistics
+  mean_val <- mean(numeric_cols[[colname]], na.rm = TRUE)
+  sd_val <- sd(numeric_cols[[colname]], na.rm = TRUE)
+  min_val <- min(numeric_cols[[colname]], na.rm = TRUE)
+  max_val <- max(numeric_cols[[colname]], na.rm = TRUE)
+  
+  # Round values to 4 decimal places
+  mean_val <- round(mean_val, 4)
+  sd_val <- round(sd_val, 4)
+  min_val <- round(min_val, 4)
+  max_val <- round(max_val, 4)
+  
+  # Create a new row and append it to summary_df
+  summary_df <- rbind(summary_df, 
+                      data.frame(Feature = colname,
+                                 Mean = format(mean_val, nsmall = 4, scientific = FALSE),
+                                 SD = format(sd_val, nsmall = 4, scientific = FALSE),
+                                 Min = format(min_val, nsmall = 4, scientific = FALSE),
+                                 Max = format(max_val, nsmall = 4, scientific = FALSE)))
+}
+
+# Display the summary table
+library(knitr)
+kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
+      caption = "Summary Statistics for Cluster 3") %>%
+  kable_styling(full_width = FALSE)
+```
+
+#### Hierarchical Clustering
+
+```{r hierarchical clustering, echo = FALSE}
+# Generate example data
+set.seed(123)  # For reproducibility
+
+# Select numeric columns
+numeric_cols <- wealthincomecluster %>% select(where(is.numeric))
+
+# Compute the distance matrix
+distance_matrix <- dist(wealthincomecluster, method = "euclidean")
+
+# Perform hierarchical clustering
+hc <- hclust(distance_matrix, method = "complete")
+
+# Plot the dendrogram
+plot(hc, main = "Hierarchical Clustering Dendrogram", xlab = "Observations", ylab = "Height")
+
+# Cut the dendrogram to create clusters
+clusters <- cutree(hc, k = 3)
+
+# Add the cluster assignments to the original dataset
+wealthincomeclusterhierarchical <- wealthincomecluster
+wealthincomeclusterhierarchical$cluster <- as.factor(clusters)
+
+# Perform PCA on the numeric columns
+pca_result <- prcomp(numeric_cols, scale. = TRUE)
+
+# Add the first two principal components to the dataset
+wealthincomeclusterhierarchical$PC1 <- pca_result$x[, 1]
+wealthincomeclusterhierarchical$PC2 <- pca_result$x[, 2]
+
+# Visualize clusters using the first two principal components
+ggplot(wealthincomeclusterhierarchical, aes(x = PC1, y = PC2, color = cluster)) +
+  geom_point(size = 3) +
+  labs(title = "Hierarchical Clustering Result (PCA)") +
+  theme_minimal()
+```
+
+
+
+Use unsupervised evaluation to describe and compare the clusterings and the clusters (some visual methods would be good). [10]
+
+Identify a feature you could use as the ground truth to perform supervised evaluation. Compare the clusterings using this method. [10]
+
+## Evaluation
+Describe your results. What recommendations can you formulate based on the clustering results? How do these recommendations relate to the ones already presented in report 1?
+
+What findings are the most interesting to your stakeholder?
+
+## List of References
+
+[1] “Covid-19,” NFID, [https://www.nfid.org/infectious-diseases/covid-19/](https://www.nfid.org/infectious-diseases/covid-19/) (accessed Oct. 8, 2024).
+
+[2] Northwestern Medicine, “Covid-19 pandemic timeline,” Northwestern Medicine, [https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline](https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline) (accessed Oct. 8, 2024).
+
+[3] “10.1 - hierarchical clustering,” 10.1 - Hierarchical Clustering | STAT 555, [https://online.stat.psu.edu/stat555/node/85/#:~:text=For%20most%20common%20hierarchical%20clustering,when%20they%20are%20perfectly%20correlated.](https://online.stat.psu.edu/stat555/node/85/#:~:text=For%20most%20common%20hierarchical%20clustering,when%20they%20are%20perfectly%20correlated.) (accessed Oct. 23, 2024). 
+
+[4] “Manhattan distance,” Wikipedia, [https://simple.wikipedia.org/wiki/Manhattan_distance](https://simple.wikipedia.org/wiki/Manhattan_distance) (accessed Oct. 23, 2024). 
+
+[5] A. Jain, “Normalization and standardization of Data,” Medium,  
+[https://medium.com/@abhishekjainindore24/normalization-and-standardization-of-data-408810a88307](https://medium.com/@abhishekjainindore24/normalization-and-standardization-of-data-408810a88307) (accessed Oct. 23, 2024).
