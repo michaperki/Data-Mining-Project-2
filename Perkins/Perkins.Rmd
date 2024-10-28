@@ -30,7 +30,7 @@ All of these questions are critical because the answers will help the property d
 ## Data Preparation
 ```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
 # Install only missing packages, load required libraries
-pkgs <- c("dplyr", "tidyr", "knitr", "kableExtra", "ggplot2", "cluster", "factoextra")
+pkgs <- c("dplyr", "tidyr", "knitr", "kableExtra", "ggplot2", "cluster", "factoextra", "stringr")
 
 new_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
 if(length(new_pkgs)) install.packages(new_pkgs)
@@ -65,26 +65,76 @@ By clustering counties based on these features, we can identify different income
 
 ### Table of Features and Basic Statistics
 ```{r basic statistics, echo = FALSE}
-# Calculate statistics for key features
+# Corrected calculation of basic statistics for each feature individually
 stats <- data %>%
   summarise(
-    across(c(median_income, income_per_capita, rent_over_50_percent, rent_30_to_35_percent,
-             income_less_10000, income_50000_59999, income_100000_124999, total_pop),
-           list(mean = ~mean(.x, na.rm = TRUE), sd = ~sd(.x, na.rm = TRUE),
-                min = ~min(.x, na.rm = TRUE), max = ~max(.x, na.rm = TRUE)))
+    median_income_mean = mean(median_income, na.rm = TRUE),
+    median_income_sd = sd(median_income, na.rm = TRUE),
+    median_income_min = min(median_income, na.rm = TRUE),
+    median_income_max = max(median_income, na.rm = TRUE),
+    
+    income_per_capita_mean = mean(income_per_capita, na.rm = TRUE),
+    income_per_capita_sd = sd(income_per_capita, na.rm = TRUE),
+    income_per_capita_min = min(income_per_capita, na.rm = TRUE),
+    income_per_capita_max = max(income_per_capita, na.rm = TRUE),
+    
+    rent_over_50_percent_mean = mean(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_sd = sd(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_min = min(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_max = max(rent_over_50_percent, na.rm = TRUE),
+    
+    rent_30_to_35_percent_mean = mean(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_sd = sd(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_min = min(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_max = max(rent_30_to_35_percent, na.rm = TRUE),
+    
+    income_less_10000_mean = mean(income_less_10000, na.rm = TRUE),
+    income_less_10000_sd = sd(income_less_10000, na.rm = TRUE),
+    income_less_10000_min = min(income_less_10000, na.rm = TRUE),
+    income_less_10000_max = max(income_less_10000, na.rm = TRUE),
+    
+    income_50000_59999_mean = mean(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_sd = sd(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_min = min(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_max = max(income_50000_59999, na.rm = TRUE),
+    
+    income_100000_124999_mean = mean(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_sd = sd(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_min = min(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_max = max(income_100000_124999, na.rm = TRUE),
+    
+    total_pop_mean = mean(total_pop, na.rm = TRUE),
+    total_pop_sd = sd(total_pop, na.rm = TRUE),
+    total_pop_min = min(total_pop, na.rm = TRUE),
+    total_pop_max = max(total_pop, na.rm = TRUE)
   )
 
-# Construct table for display
-feature_stats <- data.frame(
+# Reshape the stats for better display
+feature_stats <- tibble::tibble(
   Feature = c("Median Income", "Income per Capita", "Rent > 50% Income", 
               "Rent 30-35% Income", "Income <$10,000", "Income $50,000-$59,999",
               "Income $100,000-$124,999", "Total Population"),
-  stats
+  
+  Mean = c(stats$median_income_mean, stats$income_per_capita_mean, stats$rent_over_50_percent_mean,
+           stats$rent_30_to_35_percent_mean, stats$income_less_10000_mean, stats$income_50000_59999_mean,
+           stats$income_100000_124999_mean, stats$total_pop_mean),
+  
+  SD = c(stats$median_income_sd, stats$income_per_capita_sd, stats$rent_over_50_percent_sd,
+         stats$rent_30_to_35_percent_sd, stats$income_less_10000_sd, stats$income_50000_59999_sd,
+         stats$income_100000_124999_sd, stats$total_pop_sd),
+  
+  Min = c(stats$median_income_min, stats$income_per_capita_min, stats$rent_over_50_percent_min,
+          stats$rent_30_to_35_percent_min, stats$income_less_10000_min, stats$income_50000_59999_min,
+          stats$income_100000_124999_min, stats$total_pop_min),
+  
+  Max = c(stats$median_income_max, stats$income_per_capita_max, stats$rent_over_50_percent_max,
+          stats$rent_30_to_35_percent_max, stats$income_less_10000_max, stats$income_50000_59999_max,
+          stats$income_100000_124999_max, stats$total_pop_max)
 )
 
-# Display table
+# Display the corrected table
 kable(feature_stats, format = "markdown", caption = "Basic Statistics of Key Features") %>%
-  kable_styling(full_width = FALSE, font_size = 8.5)
+  kable_styling(full_width = FALSE, font_size = 7.5)
 
 ```
 
@@ -99,7 +149,6 @@ Because there are a lot of features that represent the wealth and income categor
   - **Income $25,000 - $29,999:**
   - **Income $45,000 - $44,999:** 
   - **Income $100,000 - $124,999:**
-  - **Income $200,000 or more:**
 
   
 ### Scale of Measurement
@@ -150,7 +199,7 @@ The normalization was based on the total population of each county, and for each
 ## Clustering Analysis
 
 
-```{r}
+```{r k-means clustering, echo=FALSE}
 # Scaling the selected features (excluding county_name)
 scaled_data <- data %>%
   select(-county_name) %>%
@@ -171,5 +220,137 @@ fviz_cluster(kmeans_result, data = scaled_data,
   labs(title = "K-Means Clustering of Texas Counties",
        x = "Dimension 1", y = "Dimension 2")
 
+```
 
+```{r k-means summary statistics by cluster, echo=FALSE}
+# Calculate average values for each feature by cluster with adjusted column names
+cluster_summary <- data_clustered %>%
+  group_by(cluster) %>%
+  summarise(
+    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
+    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
+    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
+    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
+    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
+    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
+    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
+  )
+
+# Display the summary statistics table with narrower columns and smaller font size
+kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(0:7, width = "1.5cm")
+
+
+```
+
+
+```{r k-means optimal cluster determinations, echo=FALSE}
+# Elbow Method
+fviz_nbclust(scaled_data, kmeans, method = "wss") +
+  labs(title = "Elbow Method for Determining Optimal Clusters")
+
+# Silhouette Method
+fviz_nbclust(scaled_data, kmeans, method = "silhouette") +
+  labs(title = "Silhouette Method for Determining Optimal Clusters")
+
+```
+
+```{r k-means silhouette plot, echo=FALSE}
+# Plot silhouette scores for each cluster
+fviz_silhouette(silhouette(kmeans_result$cluster, dist(scaled_data)),
+                title = "Silhouette Plot for K-means Clustering") +
+  labs(x = "Silhouette Width", y = "Clusters")
+
+
+```
+
+## Hierarchical Clustering Analysis
+
+```{r hierarchical clustering, echo=FALSE}
+# Scale data for hierarchical clustering (excluding county_name)
+scaled_data_hc <- data %>%
+  select(-county_name) %>%
+  scale()
+
+# Calculate distance matrix and perform complete linkage clustering
+distance_matrix <- dist(scaled_data_hc, method = "euclidean")
+hc_complete <- hclust(distance_matrix, method = "complete")
+
+# Plot the dendrogram
+fviz_dend(hc_complete, k = 3,          # Number of clusters
+          cex = 0.4,                   # Label size
+          rect = TRUE,                 # Draw rectangles around clusters
+          rect_fill = TRUE,            # Fill rectangles with cluster colors
+          lwd = 0.6,                   # Thicker lines for clarity
+          show_labels = FALSE) +       # Hide all labels for clarity
+  labs(title = "Hierarchical Clustering Dendrogram (Complete Linkage)") +
+  theme_minimal(base_size = 10)
+```
+
+```{r hierarchical summary, echo=FALSE}
+# Assign clusters and calculate summary statistics for hierarchical clusters
+hc_clusters <- cutree(hc_complete, k = 3)
+
+data_clustered_hc <- data %>%
+  mutate(cluster_hc = as.factor(hc_clusters))
+
+# Summarize key statistics by hierarchical clusters
+cluster_summary_hc <- data_clustered_hc %>%
+  group_by(cluster_hc) %>%
+  summarise(
+    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
+    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
+    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
+    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
+    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
+    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
+    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
+  )
+
+# Display summary table
+kable(cluster_summary_hc, format = "latex", caption = "Summary Statistics by Hierarchical Cluster", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(0:7, width = "1.5cm")
+
+```
+
+```{r hierarchical silhouette analysis, echo=FALSE}
+# Calculate silhouette scores for hierarchical clusters
+silhouette_scores <- silhouette(hc_clusters, distance_matrix)
+
+# Plot silhouette scores
+fviz_silhouette(silhouette_scores) +
+  labs(title = "Silhouette Plot for Hierarchical Clustering (Complete Linkage)",
+       x = "Silhouette Width", y = "Clusters")
+```
+
+```{r hierarchical comaprison of linkage methods, echo=FALSE}
+# Perform clustering with alternative linkage methods
+hc_average <- hclust(distance_matrix, method = "average")
+hc_ward <- hclust(distance_matrix, method = "ward.D2")
+
+# Plot alternative linkage dendrograms
+par(mfrow = c(1, 2))  # Side-by-side layout
+fviz_dend(hc_average, k = 3, rect = TRUE, rect_fill = TRUE, main = "Hierarchical Clustering (Average Linkage)")
+fviz_dend(hc_ward, k = 3, rect = TRUE, rect_fill = TRUE, main = "Hierarchical Clustering (Ward's Linkage)")
+par(mfrow = c(1, 1))  # Reset layout
+
+```
+
+```{r average silhouette width, echo=FALSE}
+# Calculate average silhouette widths for each linkage method
+silhouette_complete <- mean(silhouette(cutree(hc_complete, k = 3), distance_matrix)[, 3])
+silhouette_average <- mean(silhouette(cutree(hc_average, k = 3), distance_matrix)[, 3])
+silhouette_ward <- mean(silhouette(cutree(hc_ward, k = 3), distance_matrix)[, 3])
+
+# Summarize silhouette widths
+silhouette_summary <- data.frame(
+  Linkage_Method = c("Complete", "Average", "Ward's"),
+  Avg_Silhouette_Width = c(silhouette_complete, silhouette_average, silhouette_ward)
+)
+
+# Display silhouette summary table
+kable(silhouette_summary, format = "markdown", caption = "Average Silhouette Widths by Linkage Method") %>%
+  kable_styling(full_width = FALSE, font_size = 8.5)
 ```
