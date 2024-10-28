@@ -34,6 +34,16 @@ suppressPackageStartupMessages(library(factoextra))
 suppressPackageStartupMessages(library(ggplot2))
 ```
 
+```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
+# Suppress all messages and load the libraries.
+pkgs <- c("cluster", "dbscan", "e1071", "factoextra", "fpc", 
+          "GGally", "kernlab", "mclust", "mlbench", "scatterpie", 
+          "seriation", "tidyverse", "tibble")
+  
+pkgs_install <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+if(length(pkgs_install)) install.packages(pkgs_install)
+```
+
 ```{r load data, echo = FALSE}
 # Load the dataset.
 dataframe <- read.csv("COVID-19_cases_plus_census.csv")
@@ -213,11 +223,15 @@ Because there are a lot of features that represent the wealth and income categor
 
   - **Median Income:** This gives a central measure of income distribution in a county.
   - **Income per Capita:** Shows wealth distribution on a per-person basis, which complements median income.
+  - **Rent Under 10 Percent:**
+  - **Rent 25 to 30 Percent:** This provides a threshold of moderate rent burden.
   - **Rent Over 50 Percent:** This is a key indicator of severe rent burden, which can signify economic strain in a county.
-  - **Rent 30 to 35 Percent:** This provides a threshold of moderate rent burden.
-  - **Income $50,000 - $59,999:** This is a middle-income bracket and can act as a proxy for general economic health.
-  - **Income $100,000 - $124,999:** A higher income bracket that helps assess the presence of wealthier households.
   - **Income Less than $10,000:** Reflects the population in extreme poverty, which is crucial for understanding economic vulnerability.
+  - **Income $25,000 - $29,999:**
+  - **Income $45,000 - $44,999:** 
+  - **Income $100,000 - $124,999:**
+  - **Income $200,000 or more:**
+
   
 ### Scale of Measurement
 
@@ -284,8 +298,24 @@ The normalization was based on the total population of each county, and for each
   - **total_pop:** This variable was used as the basis for normalization. Normalizing it would not be meaningful as it serves as the denominator for other variables.
   - **median_income:** Already an average measure of income at the county level, this feature did not require normalization because it provides a direct summary of income status rather than a count or proportion.
   - **income_per_capita:** Similar to median income, this statistic reflects income averaged per individual and does not need normalization, as it is already scaled relative to the population.
+ 
+### Cluster Analysis
+#### K-Means Clustering
 
-```{r normalization, echo = FALSE}
+I tried to do both normalization and standardization to see if one method was better than the other. Whichever you want to use, you can just switch the eval from FALSE to TRUE, or remove the eval all together. 
+```{r standardization, echo = FALSE, eval = FALSE}
+# Automatically select only numeric columns
+numeric_data <- wealthincomedata %>%
+  select_if(is.numeric)
+
+# Standardization the numeric columns in wealthincomedata based on total_pop
+dataplusstandardization <- as.data.frame(scale(numeric_data))
+
+# View the first few rows of the standardization data
+head(dataplusstandardization)
+```
+
+```{r normalization, echo = FALSE, eval = FALSE}
 # Normalize the numeric columns in wealthincomedata based on total_pop
 dataplusnormalization <- wealthincomedata %>%
   mutate(across(-county_name, ~ . / total_pop, .names = "norm_{.col}"))
@@ -332,9 +362,386 @@ wealthincomecluster <- dataplusnormalization %>%
 # head(wealthincomecluster)
 ```
 
-### Cluster Analysis
-#### K-Means Clustering
-```{r k-means clustering, echo = FALSE}
+Alot of this is scratch work so it may be repetative or messy, so I apologize. In this code I tried to do K-Means with a smaller subset of the data, focusing on more key features to see if that would make a difference in the clustering. 
+``` {r , echo = FALSE, eval = FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(factoextra)
+
+# Assuming 'datatexas' is already loaded with your dataset
+# Select the relevant features for clustering
+wealthincomedata <- datatexas %>%
+  select(county_name,
+         confirmed_cases,
+         deaths,
+         median_income,
+         income_per_capita,
+         rent_under_10_percent,
+         rent_25_to_30_percent,
+         rent_over_50_percent,
+         income_less_than_10k = income_less_10000,
+         income_25k_29k = income_25000_29999,
+         income_45k_49k = income_45000_49999,
+         income_100k_124k = income_100000_124999,
+         income_200k_or_more = income_200000_or_more)
+
+# Remove county_name for clustering
+data_to_cluster <- wealthincomedata %>%
+  select(-county_name)
+
+# Scale the numeric features
+scale_numeric <- function(x) {
+  x %>% mutate(across(where(is.numeric), 
+                     function(y) (y - mean(y, na.rm = TRUE)) / sd(y, na.rm = TRUE)))
+}
+
+wealthincomedata_scaled <- scale_numeric(data_to_cluster)
+
+# Perform K-means clustering
+set.seed(123)  # for reproducibility
+km <- kmeans(wealthincomedata_scaled, centers = 2, nstart = 10)
+
+# Add cluster information to the original data
+wealthincomedata_clustered <- wealthincomedata %>%
+  mutate(cluster = factor(km$cluster))
+
+# View the clustered data
+print(wealthincomedata_clustered)
+
+# Visualize the clusters
+ggplot(wealthincomedata_clustered, aes(x = median_income, y = income_per_capita)) + 
+  geom_point(aes(color = cluster)) +
+  labs(title = "K-means Clustering of Texas Counties by Income and Wealth",
+       x = "Median Income",
+       y = "Income per Capita")
+
+# Get the centroids and convert to a data frame
+centroids <- as.data.frame(km$centers) %>%
+  mutate(cluster = factor(1:nrow(km$centers)))
+
+# Rename the columns of centroids to reflect the original features
+colnames(centroids) <- c("median_income", "income_per_capita", "rent_under_10_percent",
+                          "rent_25_to_30_percent", "rent_over_50_percent", 
+                          "income_less_than_10k", "income_25k_29k", 
+                          "income_45k_49k", "income_100k_124k", 
+                          "income_200k_or_more", "cluster")
+
+# Plot the clusters and the centroids
+ggplot() +
+  geom_point(data = wealthincomedata_clustered, 
+             aes(x = median_income, y = income_per_capita, color = cluster)) +
+  geom_point(data = centroids, 
+             aes(x = median_income, y = income_per_capita), 
+             color = "black", size = 5, shape = 3) +  # shape = 3 is an 'X' shape
+  labs(title = "Cluster Centroids", 
+       x = "Median Income", 
+       y = "Income per Capita")
+
+# Check the cluster centers
+print(km$centers)
+
+# Visualize clustering
+fviz_cluster(km, data = wealthincomedata_scaled, geom = "point", ellipse.type = "norm")
+
+``` 
+
+This is similar to the code above but in this I think a new value for the rent and income categories is created to represent where each county falls based on the combination of all of the different categories. 
+``` {r step, echo = FALSE, eval = FALSE}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(ggcorrplot)
+
+# Select relevant features
+wealthincomedata <- datatexas %>% 
+  select(county_name,
+         confirmed_cases,
+         deaths,
+         median_income,
+         income_per_capita,
+         starts_with("rent"),
+         starts_with("income"))
+
+# Create composite indices for income and rent
+wealthincomedata <- wealthincomedata %>%
+  mutate(income_index = rowMeans(select(., starts_with("income")), na.rm = TRUE),
+         rent_index = rowMeans(select(., starts_with("rent")), na.rm = TRUE))
+
+# Standardize features (excluding total population)
+wealthincomedata_scaled <- scale(select(wealthincomedata, income_index, rent_index, confirmed_cases, deaths))
+
+# Perform clustering on selected features
+set.seed(123) # For reproducibility
+km <- kmeans(wealthincomedata_scaled, centers = 3, nstart = 10)
+
+# Add clusters to data
+wealthincomedata <- wealthincomedata %>% mutate(cluster = factor(km$cluster))
+
+# Summary statistics of clusters
+cluster_summary <- wealthincomedata %>%
+  group_by(cluster) %>%
+  summarise(
+    avg_confirmed_cases = mean(confirmed_cases, na.rm = TRUE),
+    avg_deaths = mean(deaths, na.rm = TRUE),
+    avg_median_income = mean(median_income, na.rm = TRUE),
+    avg_income_per_capita = mean(income_per_capita, na.rm = TRUE),
+    avg_rent_index = mean(rent_index, na.rm = TRUE),
+  )
+
+print(cluster_summary)
+
+# Visualize confirmed cases by cluster
+ggplot(wealthincomedata, aes(x = cluster, y = confirmed_cases, fill = cluster)) +
+  geom_boxplot() +
+  labs(title = "Confirmed COVID Cases by Cluster",
+       x = "Cluster",
+       y = "Confirmed Cases") +
+  theme_minimal()
+
+# Visualize deaths by cluster
+ggplot(wealthincomedata, aes(x = cluster, y = deaths, fill = cluster)) +
+  geom_boxplot() +
+  labs(title = "COVID Deaths by Cluster",
+       x = "Cluster",
+       y = "Deaths") +
+  theme_minimal()
+
+# Visualize average income by cluster
+ggplot(cluster_summary, aes(x = cluster, y = avg_median_income, fill = cluster)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Median Income by Cluster",
+       x = "Cluster",
+       y = "Average Median Income") +
+  theme_minimal()
+
+# Visualize average rent burden by cluster
+ggplot(cluster_summary, aes(x = cluster, y = avg_rent_index, fill = cluster)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Rent Index by Cluster",
+       x = "Cluster",
+       y = "Average Rent Index") +
+  theme_minimal()
+
+# Scatter plot to visualize clusters
+ggplot(wealthincomedata, aes(x = income_index, y = confirmed_cases, color = cluster)) +
+  geom_point(size = 3, alpha = 0.7) +
+  labs(title = "Scatter Plot of Income Index vs Confirmed Cases",
+       x = "Income Index",
+       y = "Confirmed Cases") +
+  theme_minimal() +
+  scale_color_discrete(name = "Cluster")
+
+# Optional: Correlation heatmap of numeric features
+correlation_matrix <- cor(select(wealthincomedata, confirmed_cases, deaths, median_income, income_per_capita, rent_index))
+ggcorrplot(correlation_matrix, lab = TRUE, title = "Correlation Heatmap")
+``` 
+  
+I honestly don't remember what this code does exactly. Its running an error so I think I may just have moved on, but if its useful then youre welcome to look at it. 
+``` {r step 0, echo = FALSE, eval = FALSE}
+# Load necessary libraries
+library(dbscan)
+library(GGally)
+library(ggplot2)
+library(dplyr)
+
+# Assuming 'dataplusstandardization' is your dataset
+# Scale your dataset if needed (optional, depending on your data)
+dataplusstandardization_scaled <- scale(dataplusstandardization)
+
+# Rename columns to V1 and V2 for compatibility
+colnames(dataplusstandardization_scaled) <- c("V1", "V2")
+
+# Add an artificial outlier for demonstration
+dataplusstandardization_outlier <- rbind(dataplusstandardization_scaled, c(10, 0))
+
+# Perform k-means clustering on the dataset with outlier
+km <- kmeans(dataplusstandardization_outlier, centers = 4, nstart = 10)
+dataplusstandardization_outlier_km <- as.data.frame(dataplusstandardization_outlier) %>%
+  mutate(cluster = factor(km$cluster))
+centroids <- as.data.frame(km$centers) %>%
+  mutate(cluster = factor(1:nrow(km$centers)))
+
+# Visualize clusters with outlier
+ggplot(dataplusstandardization_outlier_km, aes(x = V1, y = V2, color = cluster)) + 
+  geom_point() +
+  geom_point(data = centroids, aes(x = V1, y = V2, color = cluster), shape = 3, size = 5)
+
+# Calculate Local Outlier Factor
+lof <- lof(dataplusstandardization_outlier, minPts = 10)
+
+# Visualize LOF values
+ggplot(as.data.frame(dataplusstandardization_outlier) %>% mutate(lof = lof), 
+       aes(V1, V2, color = lof)) +
+  geom_point() + 
+  scale_color_gradient(low = "gray", high = "red")
+
+# Plot sorted LOF values
+ggplot(tibble(index = seq_along(lof), lof = sort(lof)), 
+       aes(index, lof)) +
+  geom_line() +
+  geom_hline(yintercept = 1, color = "red", linetype = 2)
+
+# Identify outliers based on LOF values
+outlier_threshold <- 2
+ggplot(as.data.frame(dataplusstandardization_outlier) %>% 
+         mutate(outlier = lof >= outlier_threshold), 
+       aes(V1, V2, color = outlier)) +
+  geom_point()
+
+# Remove outliers
+dataplusstandardization_clean <- dataplusstandardization_outlier %>% 
+  filter(lof < outlier_threshold)
+
+# Perform k-means clustering on the cleaned dataset
+km_clean <- kmeans(dataplusstandardization_clean, centers = 4, nstart = 10)
+dataplusstandardization_clean_km <- as.data.frame(dataplusstandardization_clean) %>%
+  mutate(cluster = factor(km_clean$cluster))
+centroids_clean <- as.data.frame(km_clean$centers) %>%
+  mutate(cluster = factor(1:nrow(km_clean$centers)))
+
+# Visualize clusters without outliers
+ggplot(dataplusstandardization_clean_km, aes(x = V1, y = V2, color = cluster)) + 
+  geom_point() +
+  geom_point(data = centroids_clean, aes(x = V1, y = V2, color = cluster), shape = 3, size = 5)
+
+```
+  
+
+I think this is the clustering done on the original subset that has all of the columns of rent and income categories. This should follow the method Dr. Hahsler did in the textbook. 
+``` {r step 1, echo = FALSE, eval = FALSE}
+library(tidyverse)
+library(cluster)
+library(factoextra)
+
+# Remove non-numeric columns (e.g., county_name)
+numeric_data <- wealthincomedata %>%
+  select(-county_name)
+
+# Scale the numeric data
+scale_numeric <- function(x) {
+  x |> mutate(across(where(is.numeric), 
+                     function(y) (y - mean(y, na.rm = TRUE)) / sd(y, na.rm = TRUE)))
+}
+
+wealthincomedata_scaled <- numeric_data |> 
+  scale_numeric()
+
+# Perform K-means clustering
+set.seed(123)  # For reproducibility
+km <- kmeans(wealthincomedata_scaled, centers = 2, nstart = 10)
+
+# Add the cluster column to the original dataset
+wealthincomedata_clustered <- wealthincomedata |> 
+  mutate(cluster = factor(km$cluster))
+
+# Plot the clusters
+ggplot(wealthincomedata_clustered, aes(x = median_income, y = income_per_capita)) + 
+  geom_point(aes(color = cluster)) +
+  labs(title = "K-Means Clustering Results", x = "Median Income", y = "Income Per Capita") +
+  theme_minimal()
+
+# Extract centroids and unscale them
+unscale <- function(x, original_data) {
+  if (ncol(x) != ncol(original_data))
+    stop("Function needs matching columns!")
+  x * matrix(apply(original_data, MARGIN = 2, sd, na.rm = TRUE), 
+             byrow = TRUE, nrow = nrow(x), ncol = ncol(x)) + 
+    matrix(apply(original_data, MARGIN = 2, mean, na.rm = TRUE), 
+           byrow = TRUE, nrow = nrow(x), ncol = ncol(x))
+}
+
+# Extract centroids and unscale them
+centroids <- km$centers %>% 
+  unscale(original_data = numeric_data) %>% 
+  as_tibble() %>%
+  mutate(cluster = factor(1:n()))  # Create a 'cluster' column for plotting
+
+# Plot centroids on the same scatter plot
+ggplot(wealthincomedata_clustered, aes(x = median_income, y = income_per_capita)) + 
+  geom_point(aes(color = cluster)) +
+  geom_point(data = centroids, aes(x = median_income, y = income_per_capita, color = cluster), 
+             shape = 3, size = 5) +
+  labs(title = "K-Means Clustering with Centroids", x = "Median Income", y = "Income Per Capita") +
+  theme_minimal()
+
+# Visualize clustering
+fviz_cluster(km, data = wealthincomedata_scaled, geom = "point", ellipse.type = "norm")
+
+# Check the size of each cluster
+cluster_sizes <- table(wealthincomedata_clustered$cluster)
+print(cluster_sizes)
+``` 
+  
+This is a few methods to determine the number of clusters to use. Most of the charts show that 1 or 2 clusters is ideal, but I don't know that this makes sense.
+``` {r step 2, echo = FALSE, eval = FALSE}
+# Load necessary libraries
+library(tidyverse)
+library(cluster)
+library(factoextra)
+
+# Assuming your data is stored in 'dataplusstandardization'
+
+# Set the maximum number of clusters to evaluate
+max_k <- 10
+
+# --- Elbow Method ---
+wss <- numeric(max_k)
+
+for (k in 1:max_k) {
+  set.seed(123) # For reproducibility
+  kmeans_result <- kmeans(dataplusstandardization, centers = k, nstart = 10)
+  wss[k] <- kmeans_result$tot.withinss
+}
+
+# Plot the Elbow curve
+plot(1:max_k, wss, type = "b", pch = 19, xlab = "Number of Clusters (k)", 
+     ylab = "Total Within-Cluster Sum of Squares (WSS)", 
+     main = "Elbow Method for Optimal k")
+
+
+# --- Silhouette Method ---
+silhouette_scores <- numeric(max_k)
+
+for (k in 2:max_k) {
+  set.seed(123) # For reproducibility
+  km <- kmeans(dataplusstandardization, centers = k, nstart = 10)
+  ss <- silhouette(km$cluster, dist(dataplusstandardization))
+  silhouette_scores[k] <- mean(ss[, 3]) # Average silhouette width
+}
+
+# Plot the Silhouette scores
+plot(2:max_k, silhouette_scores[2:max_k], type = "b", pch = 19, 
+     xlab = "Number of Clusters (k)", 
+     ylab = "Average Silhouette Width", 
+     main = "Silhouette Method for Optimal k")
+
+
+# --- Gap Statistic ---
+set.seed(123) # For reproducibility
+gap_stat <- clusGap(dataplusstandardization, FUN = kmeans, nstart = 10, K.max = max_k, B = 50)
+fviz_gap_stat(gap_stat)
+
+``` 
+  
+This is another attempt at K-Means. It's running an error right now so I cant remember exactly what I was trying to do here. 
+```{r k-means clustering 2, echo = FALSE, eval = FALSE}
+km <- kmeans(dataplusstandardization, centers = 4, nstart = 10)
+
+# Add the cluster column to the dataset using cbind
+data_clustered <- cbind(dataplusstandardization, cluster = factor(km$cluster))
+
+# Convert it to a data frame if it's not already one
+data_clustered <- as.data.frame(data_clustered)
+
+data_clustered
+
+ggplot(data_clustered, aes(x = x, y = y)) + 
+  geom_point(aes(color = cluster))
+```
+
+This was the initial K-Means clustering I did. First I selected the features to include in the clustering dataset. 
+```{r k-means clustering, echo = FALSE, eval = FALSE}
 # Select the columns to cluster.
 clustering <- wealthincomecluster %>% 
   select(norm_confirmed_cases,
@@ -369,10 +776,58 @@ clustering <- wealthincomecluster %>%
          norm_income_200000_or_more)
 ```
 
+This is a correlation analysis to see if any of the features are highly correlated and reduntant.
+```{r correlation analysis, echo = FALSE, eval =}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)
+library(corrplot)
+
+# Assuming 'wealthincomecluster' is your data frame
+# Select the relevant columns to analyze
+columns_to_analyze <- wealthincomecluster %>%
+  select(norm_confirmed_cases, norm_deaths, norm_median_income, norm_income_per_capita,
+         norm_rent_burden_not_computed, norm_rent_over_50_percent, 
+         norm_rent_40_to_50_percent, norm_rent_35_to_40_percent,
+         norm_rent_30_to_35_percent, norm_rent_25_to_30_percent, 
+         norm_rent_20_to_25_percent, norm_rent_15_to_20_percent,
+         norm_rent_10_to_15_percent, norm_rent_under_10_percent,
+         norm_income_less_10000, norm_income_10000_14999, norm_income_15000_19999,
+         norm_income_20000_24999, norm_income_25000_29999, norm_income_30000_34999, 
+         norm_income_35000_39999, norm_income_40000_44999, norm_income_45000_49999,
+         norm_income_50000_59999, norm_income_60000_74999, norm_income_75000_99999, 
+         norm_income_100000_124999, norm_income_125000_149999, norm_income_150000_199999, 
+         norm_income_200000_or_more)
+
+# Compute the correlation matrix
+correlation_matrix <- cor(columns_to_analyze, use = "complete.obs")
+
+# Set a threshold for high correlation (e.g., 0.8)
+threshold <- 0.8
+
+# Find pairs of features with absolute correlation above the threshold
+high_correlations <- which(abs(correlation_matrix) > threshold, arr.ind = TRUE)
+
+# Filter out diagonal elements (self-correlations)
+high_correlations <- high_correlations[high_correlations[, 1] != high_correlations[, 2], ]
+
+# Print the highly correlated feature pairs
+if(nrow(high_correlations) > 0) {
+  for(i in 1:nrow(high_correlations)) {
+    feature_1 <- colnames(correlation_matrix)[high_correlations[i, 1]]
+    feature_2 <- colnames(correlation_matrix)[high_correlations[i, 2]]
+    correlation_value <- correlation_matrix[high_correlations[i, 1], high_correlations[i, 2]]
+    print(paste(feature_1, "and", feature_2, "have a correlation of", round(correlation_value, 2)))
+  }
+} else {
+  print("No features have a correlation higher than the threshold.")
+}
+```
+
+This is my original K-Means clustering calculation and display. 
 ```{r k-means clustering display, echo = FALSE, fig.width = 6, fig.height = 4, fig.align = 'center', fig.cap = "K-Means Clustering, Wealth and Income"}
 # Perform k-means clustering with a chosen number of clusters
-set.seed(123)
-kmeans_result <- kmeans(clustering, centers = 3)
+kmeans_result <- kmeans(dataplusstandardization, centers = 3, nstart = 15)
 
 # Visualize k-means clusters
 fviz_cluster(kmeans_result, data = clustering) +
@@ -390,12 +845,14 @@ county_clusters <- data.frame(county_name = wealthincomeclusterkmean$county_name
 # head(county_clusters)
 ```
 
+This is my original determination of number of clusters. 
 ```{r number of clusters, echo = FALSE, fig.width = 6, fig.height = 4, fig.align = 'center', fig.cap = "K-Means Optimal Number of Clusters"}
 # Use the Elbow method to determine the optimal number of clusters
 fviz_nbclust(clustering, kmeans, method = "wss") +
   labs(title = NULL) # Remove the title
 ```
 
+This is where I calculated the basic statistics for each cluster
 ```{r basic statistics normalized, echo = FALSE}
 # Calculate basic statistics
 statstable <- wealthincomecluster %>%
@@ -504,6 +961,7 @@ kable(statstable_final, format = "markdown", caption = "Table of Features and Ba
 
 ```
 
+Similar to above.
 ```{r summary table cluster 1, echo = FALSE}
 # Filter data for cluster 1
 cluster1 <- wealthincomeclusterkmean %>% 
@@ -550,6 +1008,7 @@ kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
   kable_styling(full_width = FALSE)
 ```
 
+Similar to above.
 ```{r summary table cluster 2, echo = FALSE}
 # Filter data for cluster 2
 cluster2 <- wealthincomeclusterkmean %>% 
@@ -596,6 +1055,7 @@ kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
   kable_styling(full_width = FALSE)
 ```
 
+Similar to above. 
 ```{r summary table cluster 3, echo = FALSE}
 # Filter data for cluster 3
 cluster3 <- wealthincomeclusterkmean %>% 
@@ -643,7 +1103,7 @@ kable(summary_df, col.names = c("Feature", "Mean", "SD", "Min", "Max"),
 ```
 
 #### Hierarchical Clustering
-
+I did not get this far and this was previous work I had. I only really was focused on K-Means
 ```{r hierarchical clustering, echo = FALSE}
 # Generate example data
 set.seed(123)  # For reproducibility
@@ -690,7 +1150,7 @@ Identify a feature you could use as the ground truth to perform supervised evalu
 ## Evaluation
 Describe your results. What recommendations can you formulate based on the clustering results? How do these recommendations relate to the ones already presented in report 1?
 
-What findings are the most interesting to your stakeholder?
+What findings are the most interesting to your stakeholder? 
 
 ## List of References
 
