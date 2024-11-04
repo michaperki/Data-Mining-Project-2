@@ -1,0 +1,187 @@
+---
+title: "Matias Clustering"
+output: html_notebook
+---
+
+
+We will do clustering of performance features and population density
+
+First we must load our data set and performance features
+
+```{r}
+library(tidycensus)
+library(tidyverse)
+```
+
+```{r}
+project_1_texas_preprocessing_data <- readRDS("RDS/county_texas_total_data.rds")
+
+project_1_texas_preprocessing_data <- project_1_texas_preprocessing_data %>% select(county_name, total_deaths, total_cases, total_population)
+
+project_1_texas_preprocessing_data %>% head()
+```
+
+Generate data set using census.gov api, since there is no package for getting area easily and I cannot find population density feature anywhere.
+
+```{r}
+library(httr)
+library(jsonlite)
+```
+
+```{r}
+county_names_to_numbers_in_census_api_call <- "https://api.census.gov/data/2023/geoinfo?get=NAME&for=county:*&in=state:48"
+county_area_in_sq_miles_in_census_api_with_county_num_call <- "https://api.census.gov/data/2023/geoinfo?get=AREALAND_SQMI&for=county:*&in=state:48"
+
+county_name_to_number_response <- httr::GET(county_names_to_numbers_in_census_api_call)
+county_area_in_sq_miles_response <- httr::GET(county_area_in_sq_miles_in_census_api_with_county_num_call)
+```
+
+Making data set from county name API call
+
+```{r}
+# Unpacks the data
+content_county_name <- content(county_name_to_number_response)
+
+# Makes numpy like data into an r matrix
+content_county_name_matrix <- do.call(rbind, content_county_name)
+
+# Converts to data frame
+county_name_dataframe <- as.data.frame(content_county_name_matrix)
+
+# Since each column is really just a list, use unnest to convert list to rows
+county_name_dataframe <- county_name_dataframe %>% unnest(col = everything())
+
+# Rename columns
+table_header = c(NAME = "V1", state = "V2", county_num = "V3")
+county_name_dataframe <- rename(county_name_dataframe, all_of(table_header))
+
+
+county_name_dataframe <- county_name_dataframe %>% slice(-1) %>% separate(NAME, into = c("county_name", "STATE NAME"), sep = ",") %>% select(county_name, county_num)
+county_name_dataframe %>% head()
+```
+
+Making data set from area in sq miles API call
+
+```{r}
+# Get content (this is a numpy like array)
+content_area_sq_miles = content(county_area_in_sq_miles_response)
+
+# Transform into dataframe
+content_area_sq_miles_data_frame <- as.data.frame(do.call(rbind, content_area_sq_miles)) %>% unnest(col = everything())
+
+column_header = c(area_sqmiles = "V1", county_num = "V3")
+
+content_area_sq_miles_data_frame <- content_area_sq_miles_data_frame %>% slice(-1) %>% rename(all_of(column_header)) %>% select(area_sqmiles, county_num)
+
+
+content_area_sq_miles_data_frame <- content_area_sq_miles_data_frame %>% left_join(county_name_dataframe, by = "county_num") %>% select(county_name, area_sqmiles) %>% mutate(area_sqmiles = as.numeric(area_sqmiles))
+
+content_area_sq_miles_data_frame %>% head()
+```
+
+Make sure there are the same number of rows in both data sets
+
+```{r}
+nrow(content_area_sq_miles_data_frame) == nrow(project_1_texas_preprocessing_data)
+```
+
+Population density units = people per sq mile (of land)
+
+```{r}
+county_data_set <- project_1_texas_preprocessing_data %>% left_join(content_area_sq_miles_data_frame, by = "county_name") %>% mutate(pop_density = total_population/area_sqmiles, deaths_per_k = (total_deaths/total_population) * 1000, cases_per_k = (total_cases/total_population) * 1000)
+
+county_data_set %>% head()
+```
+
+```{r}
+county_data_set %>% ggplot(aes(x = pop_density, y = deaths_per_k)) + geom_point()
+```
+
+
+Then we must normalize/standardize
+
+```{r}
+
+# Copied from Hahsler book
+scale_numeric <- function(x) 
+  x |> 
+  mutate(across(where(is.numeric), 
+                function(y) (y - mean(y, na.rm = TRUE)) / sd(y, na.rm = TRUE)))
+
+county_data_set.scaled <- county_data_set %>% scale_numeric()
+
+county_data_set.scaled %>% head()
+```
+
+
+We must do our elbow graph to see where diminishing returns begin
+
+```{r}
+WCSS <- sapply(2:10, FUN = function(k) {
+  kmeans(county_data_set.scaled %>% select_if(is.numeric), centers = k, nstart = 5)$tot.withinss
+  })
+
+ggplot(tibble(2:10, WCSS), aes(2:10, WCSS)) + 
+  geom_line() +
+  geom_vline(xintercept = 6, color = "red", linetype = 2)
+
+```
+
+k_means clustering
+
+```{r}
+km <- kmeans(county_data_set.scaled %>% select_if(is.numeric), centers = 6, nstart = 10)
+str(km)
+```
+```{r}
+county_data_set_kmeans_clustered.scaled <- county_data_set.scaled %>% add_column(cluster = factor(km$cluster))
+county_data_set_kmeans_clustered <- county_data_set %>% add_column(kmeans_cluster = factor(km$cluster))
+```
+
+```{r}
+county_data_set_kmeans_clustered %>% head()
+```
+```{r}
+library(factoextra)
+```
+
+```{r}
+county_data_set_numeric.scaled <- county_data_set.scaled %>% select_if(is.numeric)
+
+fviz_cluster(km, data = county_data_set_numeric.scaled, geom = "point")
+```
+
+Make dendogram
+
+```{r}
+dist_county_data <- dist(county_data_set.scaled)
+
+hc <- hclust(dist_county_data)
+```
+
+```{r}
+fviz_dend(hc, k = 6)
+```
+
+```{r}
+county_data_set_clustered <- county_data_set_kmeans_clustered %>% add_column(hierarchachal_cluster = factor(cutree(hc, k = 6)))
+county_data_set_clustered %>% head()
+```
+
+
+```{r}
+fviz_cluster(list(data = county_data_set_numeric.scaled, cluster = county_data_set_clustered$hierarchachal_cluster), geom = "point")
+```
+
+Since there was only one county for the 6th cluster, it is combined with the third.
+
+```{r}
+county_data_set_clustered <- county_data_set_clustered %>% mutate(hierarchachal_cluster = if_else(hierarchachal_cluster == "6", "3", hierarchachal_cluster))
+                                                                  
+fviz_cluster(list(data = county_data_set_numeric.scaled, cluster = county_data_set_clustered$hierarchachal_cluster), geom = "point")                                                          
+```
+
+```{r}
+county_data_set_clustered.scaled <- county_data_set_kmeans_clustered.scaled %>% add_column(hierarchachal_cluster = county_data_set_clustered$hierarchachal_cluster) %>% rename(kmeans_cluster = cluster)
+```
+
