@@ -1,0 +1,234 @@
+---
+title: "Final Report"
+author: "Olivia Hofmann, Matias Barcelo, and Mike Perkins"
+date: "2024-11-13"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 3
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+# Problem Description (Business Understanding)
+COVID-19 is a highly contagious respiratory illness that first emerged in Wuhan, China in December 2019. COVID-19 entered the United States in January 2020 with the World Health Organization (WHO) declaring COVID-19 a “global health emergency” in March 2020. The virus spreads through respiratory droplets dispersed when someone coughs, sneezes, or even talks. COVID-19 can cause symptoms including those similar to a cold, influenza, or pneumonia with the potential to become very severe and lead to death. The COVID-19 virus overwhelmed healthcare systems and disrupted economies around the world. [1] [2]
+
+The stakeholder for this data analysis is a property developer who is interested in determining the best location in Texas for developing a mixed-use building. The stakeholder’s key concern is selecting a county that demonstrates stability and resilience in response to unpredictable events, like the COVID-19 pandemic. The mixed-use building that the stakeholder is looking to develop will have space for a gym, restaurants, pharmacy, and other similar businesses. When deciding where to build this mixed-use building, the stakeholder is looking for insights into which counties in Texas have successfully managed public health crises as situations similar to this would greatly impact the success of the businesses within his building. Every business that would be in the mixed-use building would be heavily reliant on consistent traffic and economic activity. Any change in foot traffic and economic activity would directly impact the success or failure of each business. The analysis will include data on COVID-19 cases, COVID-19 deaths, and the effectiveness of government interventions (such as lock downs and social distancing). This analysis is crucial for the stakeholder to make an informed decision regarding this long-term investment, as counties that respond well to crises are more likely to provide stable environments for growth and development.
+
+Some questions that the stakeholder would like answered are:
+
+ - What are the characteristics of counties in Texas that showed resilience during the COVID-19 pandemic, based on COVID-19 case rates?
+ - What are the economic and social impacts in counties that were more or less affected by the pandemic and how might these influence future development potential?
+ - How did COVID-19 impact the workplace and employment rates in the various counties?
+ - Which counties showed consistent consumer foot traffic during the pandemic, indicating stable economic activity?
+
+All of these questions are critical because the answers will help the property developer asses the risk and potential returns on his investment. Data needed to complete this analysis includes COVID-19 data for the state of Texas, COVID-19 date for the entire United States, and COVID-19 mobility data for the world. While these datasets seem broad, each dataset contains necessary features to conduct this analysis, which will be revealed further in the report. By understanding how different counties fared during the pandemic, the developer can make an informed decision regarding where he wants to build, ensuring that the chosen location offers stability and growth potential, even during unforeseen circumstances.
+
+\newpage
+
+# Income Data in Texas Counties
+*Describe the data sources, expected quality, and how you clean and combine the data. Discuss the reliability and provide details on variable names.*
+## Data Collection and Data Quality
+```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
+# Install only missing packages, load required libraries
+pkgs <- c("dplyr", "tidyr", "knitr", "kableExtra", "ggplot2", "cluster", "factoextra", "stringr", "purrr")
+
+new_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+if(length(new_pkgs)) install.packages(new_pkgs)
+invisible(lapply(pkgs, library, character.only = TRUE))
+```
+
+```{r load data, echo = FALSE}
+# Load and filter Texas data
+data <- read.csv("../data/COVID-19_cases_plus_census.csv") %>%
+  filter(state == "TX") %>%
+  select(county_name, confirmed_cases, deaths, total_pop, median_income, income_per_capita,
+         rent_over_50_percent, rent_30_to_35_percent, income_less_10000, 
+         income_50000_59999, income_100000_124999)
+
+# Add a column for the deaths/confirmed cases ratio
+data <- data %>%
+  mutate(death_case_ratio = deaths / confirmed_cases)
+```
+
+### Objects to Cluster
+The objects to be clustered in this analysis are the counties in Texas. To identify which counties demonstrated resilience during the COVID-19 pandemic, income and rent burden metrics will be analyzed alongside general population data. Some key features for clustering include median income, income per capita, a couple rent burden levels, and a few income distribution brackets. These factors provide a comprehensive picture of each county’s economic resilience and ability to maintain stability during times of crisis.
+
+By examining income distribution and wealth concentration, we can determine which counties have strong economic foundations. This, in combination with COVID-19 case and death data, will guide the stakeholder in making an informed decision on where to invest in developing a mixed-use building. Counties that managed to sustain consumer traffic and economic activity during the pandemic will likely offer more stability and growth potential for future business ventures.
+
+### Features for Clustering
+The features analyzed for clustering relate to the category of income and wealth, which are critical for understanding economic resilience. These features include income brackets, median income per capita, rent burden percentages, and population statistics. Each of these features play a significant role in assessing to what capacity the county can withstand a widespread challenge such as the COVID-19 pandemic. 
+
+  - **Income Levels:** The distribution of households across various income levels can provide insight into a county's overall economic health and resilience.
+  - **Rent Burden:** High rent burden percentages indicate financial strain on households, which can affect their ability to manage crises effectively.
+  - **Median Income and Income per Capita:** These metrics serve as broad indicators of wealth within a county. Wealthier counties typically have more resources to navigate economic shocks and support their communities during difficult times.
+  - **Population:** Including population statistics allows for a more accurate interpretation of COVID-19 impacts by normalizing the number of cases and deaths based on county size.
+
+By clustering counties based on these features, we can identify different income and wealth profiles that may correlate with their resilience during the pandemic. This analysis will enhance our understanding of which counties were better equipped to handle the economic and social disruptions caused by COVID-19, ultimately aiding the stakeholder in making informed investment decisions.
+
+### Table of Features and Basic Statistics
+```{r basic statistics, echo = FALSE}
+# Corrected calculation of basic statistics for each feature individually
+stats <- data %>%
+  summarise(
+    median_income_mean = mean(median_income, na.rm = TRUE),
+    median_income_sd = sd(median_income, na.rm = TRUE),
+    median_income_min = min(median_income, na.rm = TRUE),
+    median_income_max = max(median_income, na.rm = TRUE),
+    
+    income_per_capita_mean = mean(income_per_capita, na.rm = TRUE),
+    income_per_capita_sd = sd(income_per_capita, na.rm = TRUE),
+    income_per_capita_min = min(income_per_capita, na.rm = TRUE),
+    income_per_capita_max = max(income_per_capita, na.rm = TRUE),
+    
+    rent_over_50_percent_mean = mean(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_sd = sd(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_min = min(rent_over_50_percent, na.rm = TRUE),
+    rent_over_50_percent_max = max(rent_over_50_percent, na.rm = TRUE),
+    
+    rent_30_to_35_percent_mean = mean(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_sd = sd(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_min = min(rent_30_to_35_percent, na.rm = TRUE),
+    rent_30_to_35_percent_max = max(rent_30_to_35_percent, na.rm = TRUE),
+    
+    income_less_10000_mean = mean(income_less_10000, na.rm = TRUE),
+    income_less_10000_sd = sd(income_less_10000, na.rm = TRUE),
+    income_less_10000_min = min(income_less_10000, na.rm = TRUE),
+    income_less_10000_max = max(income_less_10000, na.rm = TRUE),
+    
+    income_50000_59999_mean = mean(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_sd = sd(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_min = min(income_50000_59999, na.rm = TRUE),
+    income_50000_59999_max = max(income_50000_59999, na.rm = TRUE),
+    
+    income_100000_124999_mean = mean(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_sd = sd(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_min = min(income_100000_124999, na.rm = TRUE),
+    income_100000_124999_max = max(income_100000_124999, na.rm = TRUE),
+    
+    total_pop_mean = mean(total_pop, na.rm = TRUE),
+    total_pop_sd = sd(total_pop, na.rm = TRUE),
+    total_pop_min = min(total_pop, na.rm = TRUE),
+    total_pop_max = max(total_pop, na.rm = TRUE)
+  )
+
+# Reshape the stats for better display
+feature_stats <- tibble::tibble(
+  Feature = c("Median Income", "Income per Capita", "Rent > 50% Income", 
+              "Rent 30-35% Income", "Income < 10,000 USD", "Income 50,000-59,999 USD",
+              "Income 100,000-124,999 USD", "Total Population"),
+  
+  Mean = c(stats$median_income_mean, stats$income_per_capita_mean, stats$rent_over_50_percent_mean,
+           stats$rent_30_to_35_percent_mean, stats$income_less_10000_mean, stats$income_50000_59999_mean,
+           stats$income_100000_124999_mean, stats$total_pop_mean),
+  
+  SD = c(stats$median_income_sd, stats$income_per_capita_sd, stats$rent_over_50_percent_sd,
+         stats$rent_30_to_35_percent_sd, stats$income_less_10000_sd, stats$income_50000_59999_sd,
+         stats$income_100000_124999_sd, stats$total_pop_sd),
+  
+  Min = c(stats$median_income_min, stats$income_per_capita_min, stats$rent_over_50_percent_min,
+          stats$rent_30_to_35_percent_min, stats$income_less_10000_min, stats$income_50000_59999_min,
+          stats$income_100000_124999_min, stats$total_pop_min),
+  
+  Max = c(stats$median_income_max, stats$income_per_capita_max, stats$rent_over_50_percent_max,
+          stats$rent_30_to_35_percent_max, stats$income_less_10000_max, stats$income_50000_59999_max,
+          stats$income_100000_124999_max, stats$total_pop_max)
+)
+
+# Display the corrected table
+kable(feature_stats, format = "markdown", caption = "Basic Statistics of Key Features") %>%
+  kable_styling(full_width = FALSE, font_size = 10)
+```
+
+Because there are a lot of features that represent the wealth and income category, features were chosen that represent the most critical dimensions of income distribution and rent burden, while avoiding overly granular breakdowns. This selection captures the distribution of wealth (from low to high incomes), general population data, and rent burden, which are the most relevant features for analyzing the economic stability of a county.
+
+  - **Median Income:** This gives a central measure of income distribution in a county.
+  - **Income per Capita:** Shows wealth distribution on a per-person basis, which complements median income.
+  - **Rent Over 50 Percent:** This is a key indicator of severe rent burden, which can signify economic strain in a county.
+  - **Rent 30 to 35 Percent:** This provides a threshold of moderate rent burden.
+  - **Income Less than $10,000:** Reflects the population in extreme poverty, which is crucial for understanding economic vulnerability.
+  - **Income $50,000 - $59,999:** Represents household earning within a middle-income bracket, which can provide insight to stability of the county's middle class.
+  - **Income $100,000 - $124,999:** Indicates a higher income range, reflecting the proportion of relatively affluent residents. 
+
+### Scale of Measurement
+
+All of the features listed below are ratio scales because they have a true zero point (e.g., zero income, zero population) and allow for meaningful arithmetic operations (e.g., calculating differences, ratios).
+
+```{r scale of measurement, echo = FALSE}
+# Table defining measurement scales for features
+measurement_scales <- data.frame(
+  Feature = c("Median Income", "Income per Capita", "Rent > 50% Income", 
+              "Rent 30-35% Income", "Income <10,000 USD", "Income 50,000-59,999 USD",
+              "Income 100,000-124,999 USD", "Total Population"),
+  Scale = "Ratio",
+  Description = c("Income in USD", "Per capita income in USD", 
+                  "Households paying >50% income in rent", "Households paying 30-35% income in rent",
+                  "Households earning <10,000 USD", "Households earning 50,000-59,999 USD",
+                  "Households earning 100,000-124,999 USD", "Total county population")
+)
+
+# Display table
+kable(measurement_scales, format = "markdown", caption = "Measurement Scales for Features") %>%
+  kable_styling(full_width = FALSE, font_size = 10)
+```
+
+### Measures for Similarity/Distance
+
+For clustering analysis, various measures of similarity or distance can be employed based on the features used. The following measures are particularly relevant:
+
+  - **Euclidean Distance:** This is the most widely used distance measure, calculated as the straight-line distance between points in a multi-dimensional space. It is especially effective for continuous numerical data such as income or population figures, where the relationships between data points can be interpreted geometrically. Euclidean distance captures the direct linear relationship between observations, making it intuitive and straightforward for visualizing proximity in clustering contexts. [3]
+  - **Manhattan Distance:** This measure calculates the distance between two points by summing the absolute differences of their coordinates. Manhattan distance is useful when dealing with outliers or when the scale of measurement varies among features. It reflects a grid-like path, which can be advantageous in scenarios where a more robust metric against extreme values is required. In urban environments, for example, it mirrors the layout of streets. [4]
+  - **Standardization/Normalization:** When features exhibit wide ranges, normalizing the data before applying distance measures is beneficial. This ensures that each feature contributes equally to the distance calculation, preventing features with larger scales from disproportionately influencing results. [5]
+
+In this analysis, a combination of standardized/normalized distance and Euclidean distance will be utilized. The data will first be standardized to ensure that each feature contributes equally to the distance calculation. The choice of Euclidean distance is justified by its prevalence and effectiveness for income and population data, which typically exhibit continuous numerical characteristics. It provides a clear and meaningful way to measure similarity between counties based on economic and demographic factors.
+
+\newpage
+
+# Data Exploration
+*Present the quality of the data, descriptive statistics, and visualizations (e.g., histograms, scatter plots, etc.). Explain the insights and recommendations based on this exploration.*
+
+\```{r data-exploration, echo=TRUE}
+# R code for data exploration goes here
+\```
+
+\newpage
+
+# Modeling and Evaluation
+*Explain the modeling choices, assumptions, and limitations. Discuss the variables used and evaluate the model’s performance.*
+
+\```{r modeling, echo=TRUE}
+# R code for modeling and evaluation goes here
+\```
+
+\newpage
+
+# Recommendations
+*Discuss how the model can be interpreted and the recommendations based on the findings. Explain the utility for the stakeholders.*
+
+\newpage
+
+# Conclusion
+*Summarize the key findings and their relevance to the initial questions.*
+
+\newpage
+
+# List of References
+*Include consistent citations for all references used in the report.*
+
+\newpage
+
+# Appendix
+*Include code snippets, extended tables, or other supplementary information.*
+
+\newpage
+
+## Student Contributions
+*List the contributions of each team member.*
+
+\newpage
+
+## Extra Graduate Student Work
+*Detail any extra work done by graduate students in the team.*
