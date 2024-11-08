@@ -4,8 +4,11 @@ author: "Olivia Hofmann, Matias Barcelo, and Mike Perkins"
 date: "2024-11-13"
 output: 
   pdf_document:
+    fig_caption: true
     toc: true
     toc_depth: 4
+header-includes:
+  - \usepackage{caption}
 ---
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -30,9 +33,6 @@ All of these questions are critical because the answers will help the property d
 \newpage
 
 # Income Data in Texas Counties
-*Describe the data sources, expected quality, and how you clean and combine the data. Discuss the reliability and provide details on variable names.*
-*Present the quality of the data, descriptive statistics, and visualizations (e.g., histograms, scatter plots, etc.). Explain the insights and recommendations based on this exploration.*
-
 ## Data Collection, Quality, and Exploration
 ```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
 # Install only missing packages, load required libraries
@@ -55,7 +55,6 @@ data <- read.csv("data/COVID-19_cases_plus_census.csv") %>%
 data <- data %>%
   mutate(death_case_ratio = deaths / confirmed_cases)
 ```
-
 
 ### Objects to Cluster
 The objects to be clustered in this analysis are the counties in Texas. To identify which counties demonstrated resilience during the COVID-19 pandemic, income and rent burden metrics will be analyzed alongside general population data. Some key features for clustering include median income, income per capita, a couple rent burden levels, and a few income distribution brackets. These factors provide a comprehensive picture of each county’s economic resilience and ability to maintain stability during times of crisis.
@@ -189,15 +188,14 @@ For clustering analysis, various measures of similarity or distance can be emplo
 In this analysis, a combination of standardized/normalized distance and Euclidean distance will be utilized. The data will first be standardized to ensure that each feature contributes equally to the distance calculation. The choice of Euclidean distance is justified by its prevalence and effectiveness for income and population data, which typically exhibit continuous numerical characteristics. It provides a clear and meaningful way to measure similarity between counties based on economic and demographic factors.
 
 ### Normalization/Standardization
-Standardization is essential for putting features on a similar scale, enabling meaningful comparisons across variables and preventing features with larger ranges or counts from dominating the analysis—especially in clustering algorithms. Given the wide range of values in the dataset, it was necessary to standardize the numerical features before proceeding with clustering or further analysis.
+Standardization is essential for putting features on a similar scale, enabling meaningful comparisons across variables and preventing features with larger ranges or counts from dominating the analysis—especially in clustering algorithms. Given the wide range of values in the dataset, it was necessary to standardize the numerical features before proceeding with clustering or further analysis. The standardization was done using R and it transforms the data such that each feature has a mean of 0 and a standard deviation of 1. The county name was not standardized since it is a categorical variable. Since standardization is applied to numerical data, this feature was excluded from the process.
 
-The standardization was done using R and it transforms the data such that each feature has a mean of 0 and a standard deviation of 1. The county name was not standardized since it is a categorical variable. Since standardization is applied to numerical data, this feature was excluded from the process.
-
-\newpage
 
 ## Modeling and Evaluation
 ### K-Means Clustering
-The K-Means clustering plot shows how Texas counties are grouped into three distinct clusters (1, 2, and 3). Each point on the plot represents a county, and the clusters are visualized using different shapes and colors. The boarder around each cluster provides a visual boundary for each group. This clustering helps uncover patterns among the counties based on their economic resilience during the COVID-19 pandemic. 
+The K-Means clustering plot shows how Texas counties are grouped into two distinct clusters (1 and 2). Each point on the plot represents a county, and the clusters are visualized using different shapes and colors. The boarder around each cluster provides a visual boundary for each group. This clustering helps uncover patterns among the counties based on their economic resilience during the COVID-19 pandemic. 
+
+\vspace{10pt}
 
 ```{r k-means clustering, echo=FALSE}
 # Scaling the selected features (excluding county_name)
@@ -206,6 +204,7 @@ scaled_data_kmean <- data %>%
   scale()
 
 # Perform K-means clustering
+set.seed(123)
 kmeans_result <- kmeans(scaled_data_kmean, centers = 2, nstart = 20)
 
 # Append cluster assignments to the original data
@@ -220,7 +219,11 @@ fviz_cluster(kmeans_result, data = scaled_data_kmean,
        x = "Dimension 1", y = "Dimension 2")
 ```
 
-A summary statistics table is used to provide a detailed breakdown of the average values for key features across the three clusters identified through K-Means clustering. Each cluster represents a distinct group of Texas counties with similar economic, demographic, and pandemic characteristics. The table displays the average median income, income per capita, rent burden levels (both for households spending more than 50% and 30-35% of their income on rent), confirmed COVID-19 cases, deaths, and total population for each cluster.
+\captionof{figure}{K-Means Clustering of Texas Counties}
+
+\vspace{10pt}
+
+A summary statistics table is used to provide a detailed breakdown of the average values for key features across the two clusters identified through K-Means clustering. Each cluster represents a distinct group of Texas counties with similar economic, demographic, and pandemic characteristics. The table displays the average median income, income per capita, rent burden levels (both for households spending more than 50% and 30-35% of their income on rent), confirmed COVID-19 cases, deaths, and total population for each cluster.
 
 ```{r k-means summary statistics by cluster, echo=FALSE}
 # Calculate average values for each feature by cluster with adjusted column names
@@ -242,25 +245,101 @@ kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluste
   column_spec(0:7, width = "1.5cm")
 ```
 
+Cluster 1 has a high concentration of points while Cluster 2 captures a much smaller group. This incredibly uneven distribution suggests the clustering is not a great representation of the counties.
+
+  - **Average Median Income:** Cluster 1 had an average median income of 47,780.86 USD and Cluster 2 had an average median income of 56,987.00 USD. This shows a very moderate income difference of less than 10,000 USD. 
+  - **Average Deaths:** This is a pretty big discrepancy as Cluster 2 experiences 2,529 average deaths while Cluster 1 only experienced 89. This indicates that Cluster 2 captures a very specific subset of counties with higher COVID-19 mortality. 
+  
+This clustering does not offer a clear, interpretable division aligned with economic or pandemic impact metrics, as variation between clusters in largely skewed. This unsupervised K-Means clustering could perform better with supervision. 
+
 #### Suitable Number of Clusters
 The Elbow Method plots the WSS (Within-Cluster Sum of Squares) for different number of clusters. WSS measures how tightly the data points are grouped around the centroids of the clusters. After a certain point, adding more clusters provides diminishing returns, meaning the reduction in WSS becomes negligible. The optimal number of clusters is found at the "elbow" point, where the rate of decrease in WSS sharply levels off. In the following elbow plot, the elbow occurs around 2 clusters. 
-```{r k-means optimal cluster elbow, echo=FALSE}
+
+\vspace{10pt}
+
+```{r k-means optimal cluster, echo=FALSE}
 # Elbow Method
-fviz_nbclust(scaled_data_kmean, kmeans, method = "wss") +
-  labs(title = "Elbow Method for Determining Optimal Clusters")
+# fviz_nbclust(scaled_data_kmean, kmeans, method = "wss") + labs(title = "Elbow Method for Determining Optimal Clusters")
+
+# Calculate total within-cluster sum of squares for different values of k
+wss <- sapply(1:10, function(k) {
+  kmeans(scaled_data_kmean, centers = k, nstart = 20)$tot.withinss
+})
+
+
+# Add a placeholder for k = 1 with silhouette width of 0
+elbow_data <- data.frame(
+  k = 1:10,
+  wss
+)
+
+# Create the elbow plot using ggplot2
+ggplot(elbow_data, aes(x = k, y = wss)) +
+  geom_point(size = 3) +  # Adjust point size for visibility
+  geom_line(linewidth = 1) +  # Use linewidth instead of size for line thickness
+  labs(title = "Elbow Method for Determining Optimal Clusters",
+       x = "Number of clusters k",
+       y = "Total Within Sum of Square") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
+    axis.title = element_text(size = 12),              # Adjust axis title size
+    axis.text = element_text(size = 10)                # Adjust axis text size
+  )
 ```
+
+\captionof{figure}{Elbow Method for Determining Optimal Clusters}
+
+\vspace{10pt}
 
 The Silhouette Method evaluates how well each data point fits within its assigned cluster compared to other clusters. The Silhouette score ranges from -1 to 1, with values close to 1 meaning that the points are well-clustered. In the following Silhouette chart, the peak occurs at 2 clusters. 
+
+\vspace{10pt}
+
 ```{r k-means optimal cluster silhouette, echo=FALSE}
 # Silhouette Method
-fviz_nbclust(scaled_data_kmean, kmeans, method = "silhouette") +
-  labs(title = "Silhouette Method for Determining Optimal Clusters")
+# fviz_nbclust(scaled_data_kmean, kmeans, method = "silhouette") + labs(title = "Silhouette Method for Determining Optimal Clusters")
+
+# Calculate average silhouette width for k = 2 to 10
+sil_widths <- sapply(2:10, function(k) {
+  km_res <- kmeans(scaled_data_kmean, centers = k, nstart = 20)
+  silhouette_widths <- silhouette(km_res$cluster, dist(scaled_data_kmean))
+  mean(silhouette_widths[, 3])  # Extract the average silhouette width
+})
+
+# Add a placeholder for k = 1 with silhouette width of 0
+sil_data <- data.frame(
+  k = 1:10,
+  sil_width = c(0, sil_widths)  # Add 0 for k = 1
+)
+
+# Plot the silhouette method results using ggplot2
+ggplot(sil_data, aes(x = k, y = sil_width)) +
+  geom_point(size = 3) +  # Larger points for visibility
+  geom_line(linewidth = 1) +   # Use linewidth for line thickness
+  geom_vline(xintercept = 2, linetype = "dashed", color = "blue") +  # Dashed vertical line
+  labs(title = "Silhouette Method for Determining Optimal Clusters",
+       x = "Number of clusters k",
+       y = "Average silhouette width") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
+    axis.title = element_text(size = 12),              # Adjust axis title size
+    axis.text = element_text(size = 10)                # Adjust axis text size
+  )
 ```
 
-After considering both of these models, it was decided to do 2 clusters. Because of the consistency across both methods, 2 cluters was the clear choice. 
+\captionof{figure}{Silhouette Method for Determining Optimal Clusters}
+
+\vspace{10pt}
+
+After considering both of these models, it was decided to do 2 clusters. Because of the consistency across both methods, 2 clusters was the clear choice. 
 
 #### Unsupervised Evaluation
-A silhouette plot is used as the unsupervised evaluation to assess the quality and cohesion of clusters generated by the K-Means algorithm. The silhouette width is a metric used to evaluate how well each data point fits within its assigned cluster relative to other clusters. 
+A silhouette plot is used as the unsupervised evaluation to assess the quality and cohesion of clusters generated by the K-Means algorithm. The silhouette width is a metric used to evaluate how well each data point fits within its assigned cluster relative to other clusters. Values near 1 indicate that data points are well-matched to their own cluster and poorly matched to neighboring clusters (high-quality clustering). Values near 0 suggest that the data points lie equally far from two neighboring clusters (uncertainty in clustering assignments).
+
+\vspace{10pt}
+
 ```{r heirarchical silhouette plot, echo=FALSE}
 # Plot silhouette scores for each cluster
 fviz_silhouette(silhouette(kmeans_result$cluster, dist(scaled_data_kmean)),
@@ -268,14 +347,25 @@ fviz_silhouette(silhouette(kmeans_result$cluster, dist(scaled_data_kmean)),
   labs(x = "Silhouette Width", y = "Clusters")
 ```
 
-**Cluster 1 (Red):**  
+\captionof{figure}{Silhouette Plot for K-Means Clustering}
 
-**Cluster 2 (Blue):**  
+\vspace{10pt}
 
+**Cluster 1 (Red):** The size of this cluster is 250 points with an average silhouette width of 0.87. This can be interpreted to mean that most of the data points are well-separated from other clusters and they have a high degree of cohesion. Cluster 1 can be defined as compact and well-defined within the data. 
+
+**Cluster 2 (Blue):** The size of this cluster is 4 points with an average silhouette width of 0.45. This can be interpreted to mean that the points within the cluster are less cohesive and lack a clear grouping, leading to a weaker clustering group.
 
 
 #### Ground Truth Feature
-The feature used for the ground truth features is the COVID-19 deaths, comparing the clusters to the death/cases category (Lower: <0.025, Higher: >0.025). 
+The feature used for the ground truth features is the COVID-19 deaths, comparing the clusters to the death-to-case ratio category (Lower: <0.025, Higher: >0.025). The motivation for choosing this feature as the ground truth feature stems from the goal of examining how wealth and economic conditions impacted the pandemic outcomes. 
+
+  - The analysis seeks to determine if wealthier counties, indentified through income-realted clustering, exhibit better pandemic performance measured through lower mortality rates relative to confirmed cases. 
+  - By using "Lower" and "Higher" categories, the analysis is simplfied, making it easier to interpret and compare income groups. Additionally, to truly show a comparison between unsupervised and supervised clustering, it was decided to stay consistent with 2 clustering groups. 
+  - Mortality rates serve as a crutial public health indicator, directly reflecting the severity of the pandemic's impact on a county. This feature can provide meaningful insight into how income of a county can indicate resilience and lower mortality rates for a pandemic like COVID-19. 
+
+The choice of this feature thus helps explore the correlation between economic factors and the severity of the pandemic's impact, offering critical and clear insights into the resilience and vulnerabilities of different counties. 
+
+\vspace{10pt}
 
 ```{r K-means ground truth, echo=FALSE}
 # Discretize COVID-19 deaths into categories
@@ -288,7 +378,16 @@ cluster_comparison <- table(data_clustered_1$cluster, data_clustered_1$death_cat
 print(cluster_comparison)
 ```
 
+\captionof{figure}{Ground Truth Cluster Comparison}
+
+\vspace{10pt}
+
 #### Supervised Evaluation
+
+The K-Means clustering plot shows how Texas counties are grouped into two distinct clusters (1 and 2). The features used for clustering are the death_case_ratio (the ratio of COVID-19 deaths to confirmed cases) and income_per_capita. The features were scaled to have a mean of zero and standard deviation of one, making sure that both features contribute equally to the clustering process. The difference between this clustering and the previous K-Means clustering is that this is supervised, meaning that the x and y axis are intentionally chosen to provide a simplified and clear result. The clusters represent groups of counties that share similar characteristics in terms of economic conditions and pandemic impact. Counties within each cluster exhibit more similarity to each other than to those in the other cluster. 
+
+\vspace{10pt}
+
 ```{r k-means clustering supervised, echo=FALSE}
 # Create a new feature 'death_case_ratio'
 data <- data %>%
@@ -314,7 +413,13 @@ fviz_cluster(kmeans_result, data = scaled_data_kmean_sup,
        x = "Death Case Ratio", y = "Income per Capita")
 ```
 
-```{r supervised k-means summary statistics by cluster, echo=FALSE}
+\captionof{figure}{K-Means Clustering of Texas Counties Supervised}
+
+\vspace{10pt}
+
+A summary statistics table, similar to the previous clustering method, is used to provide a detailed breakdown of the average values for key features across the two supervised clusters identified through K-Means clustering. Each cluster represents a distinct group of Texas counties with more similar economic, demographic, and pandemic characteristics. The table displays the average median income, income per capita, rent burden levels (both for households spending more than 50% and 30-35% of their income on rent), confirmed COVID-19 cases, deaths, and total population for each cluster.
+
+```{r supervised k-means summary statistics by cluster, echo=FALSE, fig.cap="Summary Statistics by Cluster Supervised"}
 # Calculate average values for each feature by cluster with adjusted column names
 cluster_summary <- data_clustered_2 %>%
   group_by(cluster) %>%
@@ -334,6 +439,13 @@ kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluste
   kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
   column_spec(0:8, width = "1.25 cm")
 ```
+
+This clustering uses interpretable features: death case ratio and income per capita. This makes the clusters more meaningful, reflecting the economic status directly. The data is more evenly distributed between the two clusters, providing a clearer separation of counties. Clusters 1 and 2 have a relatively even distribution of points, suggesting that the clustering is a good representation of the counties.
+
+  - **Average Median Income:** Cluster 1 had an average median income of 58,917.73 USD and Cluster 2 had an average median income of 43,937.72 USD. This shows a very clear differentiation in economic status. The different is around 15,000 USD.  
+  - **Average Death Case Ratio:** Cluster 1 has an average ratio of 0.0166 which is significantly lower than Cluster 2's average ratio of 0.0301. This highlights the relationship between economic conditions and pandemic outcomes more effective;y. 
+
+The two K-Means clustering analyses (supervised and unsupervised) aim to categorize Texas counties based on economic and pandemic-related features, but they differ significantly in terms of clarity, precision, and interpretability. 
 
 
 ### Heirarchical Clustering
