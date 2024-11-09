@@ -181,6 +181,8 @@ county_data_set_clustered <- county_data_set_clustered %>% mutate(hierarchachal_
 fviz_cluster(list(data = county_data_set_numeric.scaled, cluster = county_data_set_clustered$hierarchachal_cluster), geom = "point")                                                          
 ```
 
+Save these clusters to the .scaled object as well.
+
 ```{r}
 county_data_set_clustered.scaled <- county_data_set_kmeans_clustered.scaled %>% add_column(hierarchachal_cluster = county_data_set_clustered$hierarchachal_cluster) %>% rename(kmeans_cluster = cluster)
 ```
