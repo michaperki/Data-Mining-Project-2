@@ -1,0 +1,37 @@
+---
+title: "Matias Clustering Part 2"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(factoextra)
+```
+
+
+```{r}
+# Load up data as r objects
+olivia_cluster_kmeans_data = readRDS("RDS/olivia_cluster_kmeans.rds")
+olivia_cluster_hierarchical_data = readRDS("RDS/olivia_cluster_hierarchical.rds")
+county_data_set.scaled = readRDS("RDS/county_data_set_cluster.scaled.rds")
+county_data_set = readRDS("RDS/county_data_set_cluster.rds")
+```
+
+```{r}
+
+# Combine data to make tables we are going to use
+county_data_set <- county_data_set %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_data, by = "county_name") %>% left_join(olivia_cluster_hierarchical_data, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
+
+county_data_set.scaled <- county_data_set.scaled %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_data, by = "county_name") %>% left_join(olivia_cluster_hierarchical_data, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
+```
+
+
+```{r}
+# Filter for olivia second cluster only
+
+filtered_kmeans_county_data_set <- county_data_set %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
+filtered_kmeans_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
+
+filtered_hierarchical_county_data_set <- county_data_set %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
+filtered_hierarchical_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
+```
