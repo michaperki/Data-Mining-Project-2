@@ -246,9 +246,13 @@ kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluste
 ```
 
 Cluster 1 has a high concentration of points while Cluster 2 captures a much smaller group. This incredibly uneven distribution suggests the clustering is not a great representation of the counties.
+  
+\vspace{5pt}
 
   - **Average Median Income:** Cluster 1 had an average median income of 47,780.86 USD and Cluster 2 had an average median income of 56,987.00 USD. This shows a very moderate income difference of less than 10,000 USD. 
-  - **Average Deaths:** This is a pretty big discrepancy as Cluster 2 experiences 2,529 average deaths while Cluster 1 only experienced 89. This indicates that Cluster 2 captures a very specific subset of counties with higher COVID-19 mortality. 
+  - **Average Deaths:** This is a pretty big discrepancy as Cluster 2 experiences 2,529 average deaths while Cluster 1 only experienced 89. This indicates that Cluster 2 captures a very specific subset of counties with higher COVID-19 mortality.
+
+\vspace{5pt}
   
 This clustering does not offer a clear, interpretable division aligned with economic or pandemic impact metrics, as variation between clusters in largely skewed. This unsupervised K-Means clustering could perform better with supervision. 
 
@@ -351,17 +355,20 @@ fviz_silhouette(silhouette(kmeans_result$cluster, dist(scaled_data_kmean)),
 
 \vspace{10pt}
 
-**Cluster 1 (Red):** The size of this cluster is 250 points with an average silhouette width of 0.87. This can be interpreted to mean that most of the data points are well-separated from other clusters and they have a high degree of cohesion. Cluster 1 can be defined as compact and well-defined within the data. 
-
-**Cluster 2 (Blue):** The size of this cluster is 4 points with an average silhouette width of 0.45. This can be interpreted to mean that the points within the cluster are less cohesive and lack a clear grouping, leading to a weaker clustering group.
+  - **Cluster 1 (Red):** The size of this cluster is 250 points with an average silhouette width of 0.87. This can be interpreted to mean that most of the data points are well-separated from other clusters and they have a high degree of cohesion. Cluster 1 can be defined as compact and well-defined within the data. 
+  - **Cluster 2 (Blue):** The size of this cluster is 4 points with an average silhouette width of 0.45. This can be interpreted to mean that the points within the cluster are less cohesive and lack a clear grouping, leading to a weaker clustering group.
 
 
 #### Ground Truth Feature
 The feature used for the ground truth features is the COVID-19 deaths, comparing the clusters to the death-to-case ratio category (Lower: <0.025, Higher: >0.025). The motivation for choosing this feature as the ground truth feature stems from the goal of examining how wealth and economic conditions impacted the pandemic outcomes. 
 
+\vspace{5pt}
+
   - The analysis seeks to determine if wealthier counties, indentified through income-realted clustering, exhibit better pandemic performance measured through lower mortality rates relative to confirmed cases. 
   - By using "Lower" and "Higher" categories, the analysis is simplfied, making it easier to interpret and compare income groups. Additionally, to truly show a comparison between unsupervised and supervised clustering, it was decided to stay consistent with 2 clustering groups. 
   - Mortality rates serve as a crutial public health indicator, directly reflecting the severity of the pandemic's impact on a county. This feature can provide meaningful insight into how income of a county can indicate resilience and lower mortality rates for a pandemic like COVID-19. 
+  
+\vspace{5pt}
 
 The choice of this feature thus helps explore the correlation between economic factors and the severity of the pandemic's impact, offering critical and clear insights into the resilience and vulnerabilities of different counties. 
 
@@ -440,12 +447,187 @@ kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluste
   column_spec(0:8, width = "1.25 cm")
 ```
 
+\vspace{5pt}
+
 This clustering uses interpretable features: death case ratio and income per capita. This makes the clusters more meaningful, reflecting the economic status directly. The data is more evenly distributed between the two clusters, providing a clearer separation of counties. Clusters 1 and 2 have a relatively even distribution of points, suggesting that the clustering is a good representation of the counties.
 
-  - **Average Median Income:** Cluster 1 had an average median income of 58,917.73 USD and Cluster 2 had an average median income of 43,937.72 USD. This shows a very clear differentiation in economic status. The different is around 15,000 USD.  
-  - **Average Death Case Ratio:** Cluster 1 has an average ratio of 0.0166 which is significantly lower than Cluster 2's average ratio of 0.0301. This highlights the relationship between economic conditions and pandemic outcomes more effective;y. 
+\vspace{5pt}
+
+  - **Average Median Income:** Cluster 1 had an average median income of 58,917.73 USD and Cluster 2 had an average median income of 43,937.72 USD. This shows a very clear differentiation in economic status. The different is around 15,000 USD. 
+  - **Average Death Case Ratio:** Cluster 1 has an average ratio of 0.0166 which is significantly lower than Cluster 2's average ratio of 0.0301. This highlights the relationship between economic conditions and pandemic outcomes more effectively. 
+  
+\vspace{5pt}
 
 The two K-Means clustering analyses (supervised and unsupervised) aim to categorize Texas counties based on economic and pandemic-related features, but they differ significantly in terms of clarity, precision, and interpretability. 
+
+\vspace{5pt}
+
+Within Clusters 1 and 2, the counties are grouped based on their income and rent burdens. There are three income groups (Low: Income per Capita < 25,000 USD, Middle: 25,000 USD <= Income per Capita < 40,000 USD, High: Income per Capita > 40,000 USD) and two rent burden groups (Low: Rent over 50 Percent <= 5000, High: Rent over 50 Percent > 5000) that are used to provide more detailed comparison of the clusters. 
+
+``` {r supervised grouping, echo = FALSE, message = FALSE, warning = FALSE}
+# Create income level groups within clusters
+data_clustered_2 <- data_clustered_2 %>%
+  mutate(
+    income_group = case_when(
+      income_per_capita < 25000 ~ "Low Income",
+      income_per_capita >= 25000 & income_per_capita < 40000 ~ "Middle Income",
+      income_per_capita >= 40000 ~ "High Income"
+    ),
+    
+    rent_burden_group = case_when(
+      rent_over_50_percent > 5000 ~ "High Rent Burden",
+      rent_over_50_percent <= 5000 ~ "Low Rent Burden"
+    )
+  )
+
+# Summarize statistics for subgroups within each cluster
+subgroup_summary <- data_clustered_2 %>%
+  group_by(cluster, income_group, rent_burden_group) %>%
+  summarise(
+    "Avg Median Income" = mean(median_income, na.rm = TRUE),
+    "Avg Income per Capita" = mean(income_per_capita, na.rm = TRUE),
+    "Avg Death Case Ratio" = mean(death_case_ratio, na.rm = TRUE),
+    "Total Population" = mean(total_pop, na.rm = TRUE)
+  )
+
+# Display the summary statistics table for subgroups
+kable(subgroup_summary, format = "latex", caption = "Summary Statistics by Subgroups Within Clusters", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(0:8, width = "1.25 cm")
+```
+
+**Cluster 1 Analysis**
+
+\vspace{5pt}
+
+  - **Low Income & High Rent Burden:** With an average median income of approximately 39,219.50 USD and an average income per capita of 17,058.50 USD, this subgroup has a death per case ratio of 0.0258 and a relatively high population of about 591,047.25. This suggests that areas with low income and high rent burden may experience significant economic strain and relatively higher mortality rates.
+  - **Low Income & Low Rent Burden:** This subgroup, with a slightly higher average median income of 43,140.55 USD and income per capita of 21,125.65 USD, has a death case ratio of 0.0279. The total population is notably lower at 23,914.66, which may indicate that smaller populations with low rent burden still faced considerable pandemic challenges.
+  - **Middle Income & Low Rent Burden:** With the highest average median income and income per capita of Cluster 1, 48,879 USD and 26,590.88 respectively, the death per case ratio is 0.0419 which is the highest in Cluster 1. This could reflect that middle-income regions with low rent burdens still faced significant health challenges, potentially due to other socioeconomic or healthcare access factors.
+  
+\vspace{5pt}
+  
+**Cluster 2 Analysis**
+
+  - **Low Income & High Rent Burden:** With an average median income of 46,262 USD and income per capita of 24,273 USD, this subgroup has a relatively lower death case ratio of 0.0157 compared to its Cluster 1 counterparts. This indicates that economic vulnerability did not translate to equally severe pandemic outcomes across all metrics.
+  - **Low Income & Low Rent Burden:** This subgroup has an average median income of 46,604.71 USD and income per capita of 23,835.43 USD, with a low death case ratio of 0.0118. The total population is 26,067.43. The low rent burden appears to mitigate some of the negative effects of low income.
+  - **Middle Income & High Rent Burden:** With a median income of 62,475.78 USD and income per capita of 30,879.67 USD, this subgroup shows a death case ratio of 0.0119. This indicates a significant economic uplift compared to low-income groups, with moderate resilience in pandemic outcomes despite high rent burdens.
+  - **Middle Income & Low Rent Burden:** This subgroup has an average median income of 58,966.32 USD and income per capita of 29,439.27 USD, with a death case ratio of 0.0183. The lower rent burden may provide economic stability, but the death case ratio suggests room for improvement in health outcomes.
+  - **High Income & High Rent Burden:** This subgroup stands out with a high average median income of 90,124 USD and income per capita of 41,609 USD. The death case ratio is the lowest at 0.0075, suggesting that wealthier areas with high rent burdens may have been better equipped to manage the pandemic’s impact. The total population in this group is substantial, at 914,075, indicating a dense but resilient economic region.
+  
+\vspace{5pt}
+
+Higher income levels within Cluster 2 are associated with significantly lower death case ratios, highlighting the advantage of economic stability in managing the pandemic. Conversely, lower income groups in both clusters generally exhibit higher death case ratios. Rent burden appears to be a critical factor in economic vulnerability. However, even within high rent burden subgroups, those with higher income levels (Cluster 2) have better health outcomes. Subgroups with higher populations (e.g., high income, high rent burden areas in Cluster 2) show better resilience, possibly due to better infrastructure, healthcare access, and community resources.
+
+\vspace{5pt}
+
+The analysis reveals a clear relationship between income, rent burden, and pandemic outcomes. Wealthier areas, even with high rent burdens, were better at mitigating the negative impacts of COVID-19. These findings emphasize the importance of socioeconomic status and housing stability in public health crises. For stakeholders, this insight can guide investment and development decisions to prioritize areas with economic resilience or consider interventions to support vulnerable regions.
+
+\vspace{5pt}
+
+The following visualization illustrates the K-Means clustering results for Texas counties based on two critical features: the Death Case Ratio and Income per Capita. The clusters are color-coded and outlined with borders, representing the original cluster boundaries from the K-Means algorithm. Each point within the plot is labeled by income group and rent burden status, providing additional context about economic and housing conditions within each cluster.
+
+\vspace{10pt}
+
+``` {r supervised grouping on Cluster chart, echo = FALSE, message = FALSE, warning = FALSE}
+# Plot the original Cluster boundaries without the points
+plot_with_borders <- fviz_cluster(
+  kmeans_result,
+  data = scaled_data_kmean_sup,
+  geom = "none",  # Exclude points
+  ellipse.type = "convex",  # Draw convex cluster boundaries
+  ggtheme = theme_minimal()
+)
+
+# Now, add the new groupings onto the plot with the cluster boundaries
+ggplot(data_clustered_2, aes(x = scaled_data_kmean_sup[, 1], y = scaled_data_kmean_sup[, 2])) +
+  # Add the cluster boundaries from the original plot
+  plot_with_borders$layers[[1]] +
+  geom_point(aes(color = income_group, shape = rent_burden_group), size = 3) +
+  labs(
+    title = "K-Means Clustering with Groupings",
+    x = "Death Case Ratio",
+    y = "Income per Capita"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Low Income" = "blue", "Middle Income" = "green", "High Income" = "red")) +
+  scale_shape_manual(values = c(8, 18)) +  # Use different shapes: 16 (circle), 17 (triangle), 18 (diamond)
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  guides(color = guide_legend(title = "Income Group"), shape = guide_legend(title = "Rent Burden Group"))
+```
+\captionof{figure}{K-Means Clustering with Groupings}
+
+\vspace{10pt}
+
+**Cluster 1 (Red Region)**
+This cluster is characterized by a higher Death Case Ratio and generally lower ot middle Income per Capita. The blue points represent low-income groups, and the density of these points suggests a strong presence of economically vulnerable areas within this cluster. The green points, representing middle-income groups, are present but less dense compared to the low-income group. Notably, this cluster contains both high and low rent burden subgroups, with high rent burden subgroups (indicated by star-shaped markers) mixed throughout. This implies that some areas within this cluster experience compounded economic stress, both in terms of income and rent burden, which could exacerbate health outcomes.
+
+\vspace{5pt}
+
+**Cluster 2 (Blue Region)**
+This cluster encompasses areas with a lower Death Case Ratio and generally higher Income per Capita. The red points indicate high-income areas, clustered toward the upper end of the income per capita axis, reflecting wealthier regions with better pandemic outcomes. There is a significant presence of green points representing middle-income groups, indicating that this cluster captures a range of moderately affluent areas. These areas seem to have fared better in terms of health outcomes compared to Cluster 1. High-income areas (red points) appear to have a mix of high and low rent burden groups, but even those with high rent burdens display relatively low Death Case Ratios. This suggests that wealthier regions, even with high rent burdens, may have had resources to mitigate the pandemic’s effects.
+
+\vspace{5pt}
+
+The clustering highlights a strong correlation between income and health resilience. Higher income per capita is associated with lower Death Case Ratios, likely due to better access to healthcare, resources, and infrastructure to manage health crises. Low-income areas, especially those burdened by high housing costs, appear more vulnerable. The presence of both low and high rent burden groups in Cluster 1 suggests that financial strain could amplify the negative impact of the pandemic. Middle-income areas straddle both clusters, indicating that not all middle-income regions experienced the pandemic uniformly. Factors beyond income, such as healthcare infrastructure, population density, or social support, could influence outcomes.
+
+\vspace{5pt}
+
+The following table presents the purity scores for the two different subgroup classifications: Income Groups and Rent Burden Groups. 
+
+``` {r purity calcuations, echo = FALSE, warning = FALSE, message = FALSE}
+# Calculate purity score
+calculate_purity <- function(cluster_labels, true_labels) {
+  # Combine the cluster and true labels into a data frame
+  data_labels <- data.frame(cluster = cluster_labels, true_label = true_labels)
+  
+  # Group by clusters and find the most frequent label in each cluster
+  majority_vote <- data_labels %>%
+    group_by(cluster) %>%
+    summarise(
+      majority_label = names(sort(table(true_label), decreasing = TRUE)[1]),
+      correct_count = max(table(true_label))
+    )
+  
+  # Sum the counts of correctly classified data points
+  total_correct <- sum(majority_vote$correct_count)
+  
+  # Compute purity score
+  purity_score <- total_correct / nrow(data_labels)
+  return(purity_score)
+}
+
+# Compute purity score for income groups
+purity_income <- calculate_purity(data_clustered_2$cluster, data_clustered_2$income_group)
+
+# Compute purity score for rent burden groups
+purity_rent_burden <- calculate_purity(data_clustered_2$cluster, data_clustered_2$rent_burden_group)
+
+# Create a data frame for the purity scores
+purity_scores_df <- data.frame(
+  Grouping = c("Income Groups", "Rent Burden Groups"),
+  Purity_Score = c(purity_income, purity_rent_burden)
+)
+
+# Display the table using kable
+kable(purity_scores_df, format = "latex", caption = "Purity Scores by Grouping", booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, font_size = 10)
+```
+
+Purity is a metric used to evaluate the quality of clustering by measuring the extent to which clusters contain data points of a single class. A higher purity score indicates that the clusters are more homogeneous concerning the given grouping.
+
+\vspace{5pt}
+
+  - **Income:** A purity score of 0.870 indicates that 87.0 percent of the data points within clusters are correctly grouped based on their income level (Low, Middle, or High Income). The relatively high score suggests that the clustering model is effective in distinguishing counties based on income characteristics, but there is still a bit of overlap or misclassification. The presence of overlap could imply that income levels alone do not fully explain the clustering structure. 
+  - **Rent Burden:** The purity score for rent burden classification is 90.6 percent, which is slightly higher than the score for income groups. This suggests that the clusters are even better at grouping counties based on housing affordability stress, indicated by whether they experience high or low rent burdens. This could mean that rent burden is a more distinct factor in the clustering analysis.
+
+\vspace{5pt}
+
+Both scores are relatively high, indicating that the K-Means clustering captures meaningful distinctions in the data. Given the high but not perfect purity scores, there may be other unexamined variables influencing the clusters. Additional socioeconomic or demographic factors could be considered in future models to further refine the clustering results.
+Overall, the analysis suggests that while both income and rent burden are effective for understanding the clustering of Texas counties, housing stress appears to be a particularly significant and differentiating factor. This insight could be valuable for stakeholders aiming to address economic disparities or plan for community resilience.
 
 
 ### Heirarchical Clustering
@@ -591,6 +773,7 @@ cluster_comparison_hc <- table(data_clustered_hc$cluster_hc, data_clustered_hc$d
 # Step 4: Print the contingency table
 print(cluster_comparison_hc)
 ```
+
 #### Supervised Evaluation
 
 ```{r hierarchical clustering supervised, echo=FALSE}
