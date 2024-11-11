@@ -13,9 +13,7 @@ output:
     df_print: paged
 header-includes: \usepackage{caption}
 ---
-```{r setup, include = FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+
 
 \newpage
 
@@ -37,27 +35,9 @@ All of these questions are critical because the answers will help the property d
 
 # Income Data in Texas Counties
 ## Data Collection, Quality, and Exploration
-```{r install packages, echo = FALSE, message = FALSE, warning = FALSE, error = FALSE}
-# Install only missing packages, load required libraries
-pkgs <- c("dplyr", "tidyr", "knitr", "kableExtra", "ggplot2", "cluster", "factoextra", "stringr", "purrr")
 
-new_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
-if(length(new_pkgs)) install.packages(new_pkgs)
-invisible(lapply(pkgs, library, character.only = TRUE))
-```
 
-```{r load data, echo = FALSE}
-# Load and filter Texas data
-data <- read.csv("data/COVID-19_cases_plus_census.csv") %>%
-  filter(state == "TX") %>%
-  select(county_name, confirmed_cases, deaths, total_pop, median_income, income_per_capita,
-         rent_over_50_percent, rent_30_to_35_percent, income_less_10000, 
-         income_50000_59999, income_100000_124999)
 
-# Add a column for the deaths/confirmed cases ratio
-data <- data %>%
-  mutate(death_case_ratio = deaths / confirmed_cases)
-```
 
 ### Objects to Cluster
 The objects to be clustered in this analysis are the counties in Texas. To identify which counties demonstrated resilience during the COVID-19 pandemic, income and rent burden metrics will be analyzed alongside general population data. Some key features for clustering include median income, income per capita, a couple rent burden levels, and a few income distribution brackets. These factors provide a comprehensive picture of each county’s economic resilience and ability to maintain stability during times of crisis.
@@ -75,78 +55,25 @@ The features analyzed for clustering relate to the category of income and wealth
 By clustering counties based on these features, we can identify different income and wealth profiles that may correlate with their resilience during the pandemic. This analysis will enhance our understanding of which counties were better equipped to handle the economic and social disruptions caused by COVID-19, ultimately aiding the stakeholder in making informed investment decisions.
 
 ### Table of Features and Basic Statistics
-```{r basic statistics, echo = FALSE}
-# Corrected calculation of basic statistics for each feature individually
-stats <- data %>%
-  summarise(
-    median_income_mean = mean(median_income, na.rm = TRUE),
-    median_income_sd = sd(median_income, na.rm = TRUE),
-    median_income_min = min(median_income, na.rm = TRUE),
-    median_income_max = max(median_income, na.rm = TRUE),
-    
-    income_per_capita_mean = mean(income_per_capita, na.rm = TRUE),
-    income_per_capita_sd = sd(income_per_capita, na.rm = TRUE),
-    income_per_capita_min = min(income_per_capita, na.rm = TRUE),
-    income_per_capita_max = max(income_per_capita, na.rm = TRUE),
-    
-    rent_over_50_percent_mean = mean(rent_over_50_percent, na.rm = TRUE),
-    rent_over_50_percent_sd = sd(rent_over_50_percent, na.rm = TRUE),
-    rent_over_50_percent_min = min(rent_over_50_percent, na.rm = TRUE),
-    rent_over_50_percent_max = max(rent_over_50_percent, na.rm = TRUE),
-    
-    rent_30_to_35_percent_mean = mean(rent_30_to_35_percent, na.rm = TRUE),
-    rent_30_to_35_percent_sd = sd(rent_30_to_35_percent, na.rm = TRUE),
-    rent_30_to_35_percent_min = min(rent_30_to_35_percent, na.rm = TRUE),
-    rent_30_to_35_percent_max = max(rent_30_to_35_percent, na.rm = TRUE),
-    
-    income_less_10000_mean = mean(income_less_10000, na.rm = TRUE),
-    income_less_10000_sd = sd(income_less_10000, na.rm = TRUE),
-    income_less_10000_min = min(income_less_10000, na.rm = TRUE),
-    income_less_10000_max = max(income_less_10000, na.rm = TRUE),
-    
-    income_50000_59999_mean = mean(income_50000_59999, na.rm = TRUE),
-    income_50000_59999_sd = sd(income_50000_59999, na.rm = TRUE),
-    income_50000_59999_min = min(income_50000_59999, na.rm = TRUE),
-    income_50000_59999_max = max(income_50000_59999, na.rm = TRUE),
-    
-    income_100000_124999_mean = mean(income_100000_124999, na.rm = TRUE),
-    income_100000_124999_sd = sd(income_100000_124999, na.rm = TRUE),
-    income_100000_124999_min = min(income_100000_124999, na.rm = TRUE),
-    income_100000_124999_max = max(income_100000_124999, na.rm = TRUE),
-    
-    total_pop_mean = mean(total_pop, na.rm = TRUE),
-    total_pop_sd = sd(total_pop, na.rm = TRUE),
-    total_pop_min = min(total_pop, na.rm = TRUE),
-    total_pop_max = max(total_pop, na.rm = TRUE)
-  )
+\begingroup\fontsize{10}{12}\selectfont
 
-# Reshape the stats for better display
-feature_stats <- tibble::tibble(
-  Feature = c("Median Income", "Income per Capita", "Rent > 50% Income", 
-              "Rent 30-35% Income", "Income < 10,000 USD", "Income 50,000-59,999 USD",
-              "Income 100,000-124,999 USD", "Total Population"),
-  
-  Mean = c(stats$median_income_mean, stats$income_per_capita_mean, stats$rent_over_50_percent_mean,
-           stats$rent_30_to_35_percent_mean, stats$income_less_10000_mean, stats$income_50000_59999_mean,
-           stats$income_100000_124999_mean, stats$total_pop_mean),
-  
-  SD = c(stats$median_income_sd, stats$income_per_capita_sd, stats$rent_over_50_percent_sd,
-         stats$rent_30_to_35_percent_sd, stats$income_less_10000_sd, stats$income_50000_59999_sd,
-         stats$income_100000_124999_sd, stats$total_pop_sd),
-  
-  Min = c(stats$median_income_min, stats$income_per_capita_min, stats$rent_over_50_percent_min,
-          stats$rent_30_to_35_percent_min, stats$income_less_10000_min, stats$income_50000_59999_min,
-          stats$income_100000_124999_min, stats$total_pop_min),
-  
-  Max = c(stats$median_income_max, stats$income_per_capita_max, stats$rent_over_50_percent_max,
-          stats$rent_30_to_35_percent_max, stats$income_less_10000_max, stats$income_50000_59999_max,
-          stats$income_100000_124999_max, stats$total_pop_max)
-)
-
-# Display the corrected table
-kable(feature_stats, format = "markdown", caption = "Basic Statistics of Key Features") %>%
-  kable_styling(full_width = FALSE, font_size = 10)
-```
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:basic statistics}Basic Statistics of Key Features}\\
+\toprule
+Feature & Mean & SD & Min & Max\\
+\midrule
+Median Income & 49894.339 & 12132.676 & 24794 & 93645\\
+Income per Capita & 24859.020 & 5240.752 & 12543 & 41609\\
+Rent > 50\% Income & 2976.004 & 13179.056 & 0 & 158668\\
+Rent 30-35\% Income & 1180.870 & 5203.838 & 0 & 61305\\
+Income < 10,000 USD & 2469.768 & 8601.256 & 0 & 98715\\
+\addlinespace
+Income 50,000-59,999 USD & 2945.197 & 10790.454 & 3 & 122390\\
+Income 100,000-124,999 USD & 3205.157 & 11657.055 & 0 & 131467\\
+Total Population & 107951.228 & 389476.863 & 74 & 4525519\\
+\bottomrule
+\end{longtable}
+\endgroup{}
 
 Because there are a lot of features that represent the wealth and income category, features were chosen that represent the most critical dimensions of income distribution and rent burden, while avoiding overly granular breakdowns. This selection captures the distribution of wealth (from low to high incomes), general population data, and rent burden, which are the most relevant features for analyzing the economic stability of a county.
 
@@ -162,23 +89,25 @@ Because there are a lot of features that represent the wealth and income categor
 
 All of the features listed below are ratio scales because they have a true zero point (e.g., zero income, zero population) and allow for meaningful arithmetic operations (e.g., calculating differences, ratios).
 
-```{r scale of measurement, echo = FALSE}
-# Table defining measurement scales for features
-measurement_scales <- data.frame(
-  Feature = c("Median Income", "Income per Capita", "Rent > 50% Income", 
-              "Rent 30-35% Income", "Income <10,000 USD", "Income 50,000-59,999 USD",
-              "Income 100,000-124,999 USD", "Total Population"),
-  Scale = "Ratio",
-  Description = c("Income in USD", "Per capita income in USD", 
-                  "Households paying >50% income in rent", "Households paying 30-35% income in rent",
-                  "Households earning <10,000 USD", "Households earning 50,000-59,999 USD",
-                  "Households earning 100,000-124,999 USD", "Total county population")
-)
+\begingroup\fontsize{10}{12}\selectfont
 
-# Display table
-kable(measurement_scales, format = "markdown", caption = "Measurement Scales for Features") %>%
-  kable_styling(full_width = FALSE, font_size = 10)
-```
+\begin{longtable}[t]{lll}
+\caption{\label{tab:scale of measurement}Measurement Scales for Features}\\
+\toprule
+Feature & Scale & Description\\
+\midrule
+Median Income & Ratio & Income in USD\\
+Income per Capita & Ratio & Per capita income in USD\\
+Rent > 50\% Income & Ratio & Households paying >50\% income in rent\\
+Rent 30-35\% Income & Ratio & Households paying 30-35\% income in rent\\
+Income <10,000 USD & Ratio & Households earning <10,000 USD\\
+\addlinespace
+Income 50,000-59,999 USD & Ratio & Households earning 50,000-59,999 USD\\
+Income 100,000-124,999 USD & Ratio & Households earning 100,000-124,999 USD\\
+Total Population & Ratio & Total county population\\
+\bottomrule
+\end{longtable}
+\endgroup{}
 
 ### Measures for Similarity/Distance
 
@@ -200,27 +129,7 @@ The K-Means clustering plot shows how Texas counties are grouped into two distin
 
 \vspace{10pt}
 
-```{r k-means clustering, echo=FALSE}
-# Scaling the selected features (excluding county_name)
-scaled_data_kmean <- data %>%
-  select(-county_name) %>%
-  scale()
-
-# Perform K-means clustering
-set.seed(123)
-kmeans_result <- kmeans(scaled_data_kmean, centers = 2, nstart = 20)
-
-# Append cluster assignments to the original data
-data_clustered_1<- data %>%
-  mutate(cluster = as.factor(kmeans_result$cluster))
-
-# Visualization of Clustering
-fviz_cluster(kmeans_result, data = scaled_data_kmean,
-             geom = "point", ellipse.type = "convex",
-             ggtheme = theme_minimal(), labelsize = 10) +
-  labs(title = "K-Means Clustering of Texas Counties",
-       x = "Dimension 1", y = "Dimension 2")
-```
+![](Final-Report_files/figure-latex/k-means clustering-1.pdf)<!-- --> 
 
 \captionof{figure}{K-Means Clustering of Texas Counties}
 
@@ -228,25 +137,32 @@ fviz_cluster(kmeans_result, data = scaled_data_kmean,
 
 A summary statistics table is used to provide a detailed breakdown of the average values for key features across the two clusters identified through K-Means clustering. Each cluster represents a distinct group of Texas counties with similar economic, demographic, and pandemic characteristics. The table displays the average median income, income per capita, rent burden levels (both for households spending more than 50% and 30-35% of their income on rent), confirmed COVID-19 cases, deaths, and total population for each cluster.
 
-```{r k-means summary statistics by cluster, echo=FALSE}
-# Calculate average values for each feature by cluster with adjusted column names
-cluster_summary <- data_clustered_1 %>%
-  group_by(cluster) %>%
-  summarise(
-    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
-    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
-    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
-    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
-    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
-    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
-    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
-  )
-
-# Display the summary statistics table with narrower columns and smaller font size
-kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:7, width = "1.5cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:k-means summary statistics by cluster}Summary Statistics by Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}r}
+\toprule
+cluster & Avg
+Median
+Income & Avg
+Income
+per Capita & Avg
+Rent
+> 50\% & Avg
+Rent
+30-35\% & Avg
+Confirmed
+Cases & Avg
+Deaths & Total
+Population\\
+\midrule
+1 & 49780.86 & 24786.04 & 1551.7 & 615.408 & 5078.896 & 89.052 & 65864.8\\
+2 & 56987.00 & 29420.25 & 91995.0 & 36522.250 & 217182.500 & 2529.000 & 2738352.8\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Cluster 1 has a high concentration of points while Cluster 2 captures a much smaller group. This incredibly uneven distribution suggests the clustering is not a great representation of the counties.
   
@@ -264,36 +180,7 @@ The Elbow Method plots the WSS (Within-Cluster Sum of Squares) for different num
 
 \vspace{10pt}
 
-```{r k-means optimal cluster, echo=FALSE}
-# Elbow Method
-# fviz_nbclust(scaled_data_kmean, kmeans, method = "wss") + labs(title = "Elbow Method for Determining Optimal Clusters")
-
-# Calculate total within-cluster sum of squares for different values of k
-wss <- sapply(1:10, function(k) {
-  kmeans(scaled_data_kmean, centers = k, nstart = 20)$tot.withinss
-})
-
-
-# Add a placeholder for k = 1 with silhouette width of 0
-elbow_data <- data.frame(
-  k = 1:10,
-  wss
-)
-
-# Create the elbow plot using ggplot2
-ggplot(elbow_data, aes(x = k, y = wss)) +
-  geom_point(size = 3) +  # Adjust point size for visibility
-  geom_line(linewidth = 1) +  # Use linewidth instead of size for line thickness
-  labs(title = "Elbow Method for Determining Optimal Clusters",
-       x = "Number of clusters k",
-       y = "Total Within Sum of Square") +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
-    axis.title = element_text(size = 12),              # Adjust axis title size
-    axis.text = element_text(size = 10)                # Adjust axis text size
-  )
-```
+![](Final-Report_files/figure-latex/k-means optimal cluster-1.pdf)<!-- --> 
 
 \captionof{figure}{Elbow Method for Determining Optimal Clusters}
 
@@ -303,38 +190,7 @@ The Silhouette Method evaluates how well each data point fits within its assigne
 
 \vspace{10pt}
 
-```{r k-means optimal cluster silhouette, echo=FALSE}
-# Silhouette Method
-# fviz_nbclust(scaled_data_kmean, kmeans, method = "silhouette") + labs(title = "Silhouette Method for Determining Optimal Clusters")
-
-# Calculate average silhouette width for k = 2 to 10
-sil_widths <- sapply(2:10, function(k) {
-  km_res <- kmeans(scaled_data_kmean, centers = k, nstart = 20)
-  silhouette_widths <- silhouette(km_res$cluster, dist(scaled_data_kmean))
-  mean(silhouette_widths[, 3])  # Extract the average silhouette width
-})
-
-# Add a placeholder for k = 1 with silhouette width of 0
-sil_data <- data.frame(
-  k = 1:10,
-  sil_width = c(0, sil_widths)  # Add 0 for k = 1
-)
-
-# Plot the silhouette method results using ggplot2
-ggplot(sil_data, aes(x = k, y = sil_width)) +
-  geom_point(size = 3) +  # Larger points for visibility
-  geom_line(linewidth = 1) +   # Use linewidth for line thickness
-  geom_vline(xintercept = 2, linetype = "dashed", color = "blue") +  # Dashed vertical line
-  labs(title = "Silhouette Method for Determining Optimal Clusters",
-       x = "Number of clusters k",
-       y = "Average silhouette width") +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
-    axis.title = element_text(size = 12),              # Adjust axis title size
-    axis.text = element_text(size = 10)                # Adjust axis text size
-  )
-```
+![](Final-Report_files/figure-latex/k-means optimal cluster silhouette-1.pdf)<!-- --> 
 
 \captionof{figure}{Silhouette Method for Determining Optimal Clusters}
 
@@ -347,12 +203,14 @@ A silhouette plot is used as the unsupervised evaluation to assess the quality a
 
 \vspace{10pt}
 
-```{r heirarchical silhouette plot, echo=FALSE}
-# Plot silhouette scores for each cluster
-fviz_silhouette(silhouette(kmeans_result$cluster, dist(scaled_data_kmean)),
-                title = "Silhouette Plot for K-Means Clustering") +
-  labs(x = "Silhouette Width", y = "Clusters")
+
 ```
+##   cluster size ave.sil.width
+## 1       1  250          0.87
+## 2       2    4          0.45
+```
+
+![](Final-Report_files/figure-latex/heirarchical silhouette plot-1.pdf)<!-- --> 
 
 \captionof{figure}{Silhouette Plot for K-Means Clustering}
 
@@ -377,15 +235,12 @@ The choice of this feature thus helps explore the correlation between economic f
 
 \vspace{10pt}
 
-```{r K-means ground truth, echo=FALSE}
-# Discretize COVID-19 deaths into categories
-data_clustered_1 <- data_clustered_1 %>%
-  mutate(death_category = cut(death_case_ratio, breaks = c(-Inf, 0.025, Inf), 
-                              labels = c("Lower", "Higher")))
 
-# Create a contingency table to compare clusters with death categories
-cluster_comparison <- table(data_clustered_1$cluster, data_clustered_1$death_category)
-print(cluster_comparison)
+```
+##    
+##     Lower Higher
+##   1   145    105
+##   2     4      0
 ```
 
 \captionof{figure}{Ground Truth Cluster Comparison}
@@ -398,30 +253,7 @@ The K-Means clustering plot shows how Texas counties are grouped into two distin
 
 \vspace{10pt}
 
-```{r k-means clustering supervised, echo=FALSE}
-# Create a new feature 'death_case_ratio'
-data <- data %>%
-  mutate(death_case_ratio = deaths / confirmed_cases)
-
-# Scale the selected features (excluding county_name)
-scaled_data_kmean_sup <- data %>%
-  select(death_case_ratio, income_per_capita) %>%
-  scale(center = TRUE, scale = TRUE)
-
-# Perform K-means clustering
-kmeans_result <- kmeans(scaled_data_kmean_sup, centers = 2, nstart = 20)
-
-# Append cluster assignments to the original data
-data_clustered_2 <- data %>%
-  mutate(cluster = as.factor(kmeans_result$cluster))
-
-# Visualization of Clustering
-fviz_cluster(kmeans_result, data = scaled_data_kmean_sup,
-             geom = "point", ellipse.type = "convex",
-             ggtheme = theme_minimal(), labelsize = 10) +
-  labs(title = "K-Means Clustering of Texas Counties Supervised",
-       x = "Death Case Ratio", y = "Income per Capita")
-```
+![](Final-Report_files/figure-latex/k-means clustering supervised-1.pdf)<!-- --> 
 
 \captionof{figure}{K-Means Clustering of Texas Counties Supervised}
 
@@ -429,26 +261,33 @@ fviz_cluster(kmeans_result, data = scaled_data_kmean_sup,
 
 A summary statistics table, similar to the previous clustering method, is used to provide a detailed breakdown of the average values for key features across the two supervised clusters identified through K-Means clustering. Each cluster represents a distinct group of Texas counties with more similar economic, demographic, and pandemic characteristics. The table displays the average median income, income per capita, rent burden levels (both for households spending more than 50% and 30-35% of their income on rent), confirmed COVID-19 cases, deaths, and total population for each cluster.
 
-```{r supervised k-means summary statistics by cluster, echo=FALSE, fig.cap="Summary Statistics by Cluster Supervised"}
-# Calculate average values for each feature by cluster with adjusted column names
-cluster_summary <- data_clustered_2 %>%
-  group_by(cluster) %>%
-  summarise(
-    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
-    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
-    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
-    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
-    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
-    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
-    "Avg\nDeath Case Ratio" = mean(death_case_ratio, na.rm = TRUE),
-    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
-  )
-
-# Display the summary statistics table with narrower columns and smaller font size
-kable(cluster_summary, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:supervised k-means summary statistics by cluster}Summary Statistics by Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}r}
+\toprule
+cluster & Avg
+Median
+Income & Avg
+Income
+per Capita & Avg
+Rent
+> 50\% & Avg
+Rent
+30-35\% & Avg
+Confirmed
+Cases & Avg
+Deaths & Avg
+Death Case Ratio & Total
+Population\\
+\midrule
+1 & 43937.72 & 21876.61 & 804.7255 & 297.6667 & 3309.477 & 80.98693 & 0.0300654 & 37969.71\\
+2 & 58917.73 & 29376.93 & 6265.1683 & 2518.7921 & 16159.446 & 197.90099 & 0.0165567 & 213962.83\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \vspace{5pt}
 
@@ -467,37 +306,27 @@ The two K-Means clustering analyses (supervised and unsupervised) aim to categor
 
 Within Clusters 1 and 2, the counties are grouped based on their income and rent burdens. There are three income groups (Low: Income per Capita < 25,000 USD, Middle: 25,000 USD <= Income per Capita < 40,000 USD, High: Income per Capita > 40,000 USD) and two rent burden groups (Low: Rent over 50 Percent <= 5000, High: Rent over 50 Percent > 5000) that are used to provide more detailed comparison of the clusters. 
 
-``` {r supervised grouping, echo = FALSE, message = FALSE, warning = FALSE}
-# Create income level groups within clusters
-data_clustered_2 <- data_clustered_2 %>%
-  mutate(
-    income_group = case_when(
-      income_per_capita < 25000 ~ "Low Income",
-      income_per_capita >= 25000 & income_per_capita < 40000 ~ "Middle Income",
-      income_per_capita >= 40000 ~ "High Income"
-    ),
-    
-    rent_burden_group = case_when(
-      rent_over_50_percent > 5000 ~ "High Rent Burden",
-      rent_over_50_percent <= 5000 ~ "Low Rent Burden"
-    )
-  )
-
-# Summarize statistics for subgroups within each cluster
-subgroup_summary <- data_clustered_2 %>%
-  group_by(cluster, income_group, rent_burden_group) %>%
-  summarise(
-    "Avg Median Income" = mean(median_income, na.rm = TRUE),
-    "Avg Income per Capita" = mean(income_per_capita, na.rm = TRUE),
-    "Avg Death Case Ratio" = mean(death_case_ratio, na.rm = TRUE),
-    "Total Population" = mean(total_pop, na.rm = TRUE)
-  )
-
-# Display the summary statistics table for subgroups
-kable(subgroup_summary, format = "latex", caption = "Summary Statistics by Subgroups Within Clusters", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:supervised grouping}Summary Statistics by Subgroups Within Clusters}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{}p{1.25 cm}}
+\toprule
+cluster & income\_group & rent\_burden\_group & Avg Median Income & Avg Income per Capita & Avg Death Case Ratio & Total Population\\
+\midrule
+1 & Low Income & High Rent Burden & 39219.50 & 17058.50 & 0.0257519 & 591047.25\\
+1 & Low Income & Low Rent Burden & 43140.55 & 21125.65 & 0.0279399 & 23914.66\\
+1 & Middle Income & Low Rent Burden & 48876.00 & 26590.88 & 0.0418550 & 18993.50\\
+2 & High Income & High Rent Burden & 90124.00 & 41609.00 & 0.0074628 & 914075.00\\
+2 & Low Income & High Rent Burden & 46262.00 & 24273.00 & 0.0157121 & 245720.00\\
+\addlinespace
+2 & Low Income & Low Rent Burden & 46604.71 & 23835.43 & 0.0117692 & 26067.43\\
+2 & Middle Income & High Rent Burden & 62475.78 & 30879.67 & 0.0118649 & 956242.94\\
+2 & Middle Income & Low Rent Burden & 58966.32 & 29439.27 & 0.0182851 & 41291.97\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 **Cluster 1 Analysis**
 
@@ -531,36 +360,7 @@ The following visualization illustrates the K-Means clustering results for Texas
 
 \vspace{10pt}
 
-``` {r supervised grouping on Cluster chart, echo = FALSE, message = FALSE, warning = FALSE}
-# Plot the original Cluster boundaries without the points
-plot_with_borders <- fviz_cluster(
-  kmeans_result,
-  data = scaled_data_kmean_sup,
-  geom = "none",  # Exclude points
-  ellipse.type = "convex",  # Draw convex cluster boundaries
-  ggtheme = theme_minimal()
-)
-
-# Now, add the new groupings onto the plot with the cluster boundaries
-ggplot(data_clustered_2, aes(x = scaled_data_kmean_sup[, 1], y = scaled_data_kmean_sup[, 2])) +
-  # Add the cluster boundaries from the original plot
-  plot_with_borders$layers[[1]] +
-  geom_point(aes(color = income_group, shape = rent_burden_group), size = 3) +
-  labs(
-    title = "K-Means Clustering with Groupings",
-    x = "Death Case Ratio",
-    y = "Income per Capita"
-  ) +
-  theme_minimal() +
-  scale_color_manual(values = c("Low Income" = "blue", "Middle Income" = "green", "High Income" = "red")) +
-  scale_shape_manual(values = c(8, 18)) +  # Use different shapes: 16 (circle), 17 (triangle), 18 (diamond)
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10)
-  ) +
-  guides(color = guide_legend(title = "Income Group"), shape = guide_legend(title = "Rent Burden Group"))
-```
+![](Final-Report_files/figure-latex/supervised grouping on Cluster chart-1.pdf)<!-- --> 
 \captionof{figure}{K-Means Clustering with Groupings}
 
 \vspace{10pt}
@@ -581,44 +381,20 @@ The clustering highlights a strong correlation between income and health resilie
 
 The following table presents the purity scores for the two different subgroup classifications: Income Groups and Rent Burden Groups. 
 
-``` {r purity calcuations, echo = FALSE, warning = FALSE, message = FALSE}
-# Calculate purity score
-calculate_purity <- function(cluster_labels, true_labels) {
-  # Combine the cluster and true labels into a data frame
-  data_labels <- data.frame(cluster = cluster_labels, true_label = true_labels)
-  
-  # Group by clusters and find the most frequent label in each cluster
-  majority_vote <- data_labels %>%
-    group_by(cluster) %>%
-    summarise(
-      majority_label = names(sort(table(true_label), decreasing = TRUE)[1]),
-      correct_count = max(table(true_label))
-    )
-  
-  # Sum the counts of correctly classified data points
-  total_correct <- sum(majority_vote$correct_count)
-  
-  # Compute purity score
-  purity_score <- total_correct / nrow(data_labels)
-  return(purity_score)
-}
-
-# Compute purity score for income groups
-purity_income <- calculate_purity(data_clustered_2$cluster, data_clustered_2$income_group)
-
-# Compute purity score for rent burden groups
-purity_rent_burden <- calculate_purity(data_clustered_2$cluster, data_clustered_2$rent_burden_group)
-
-# Create a data frame for the purity scores
-purity_scores_df <- data.frame(
-  Grouping = c("Income Groups", "Rent Burden Groups"),
-  Purity_Score = c(purity_income, purity_rent_burden)
-)
-
-# Display the table using kable
-kable(purity_scores_df, format = "latex", caption = "Purity Scores by Grouping", booktabs = TRUE) %>%
-  kable_styling(full_width = FALSE, font_size = 10)
-```
+\begin{table}
+\centering
+\caption{\label{tab:purity calcuations}Purity Scores by Grouping}
+\centering
+\fontsize{10}{12}\selectfont
+\begin{tabular}[t]{lr}
+\toprule
+Grouping & Purity\_Score\\
+\midrule
+Income Groups & 0.8700787\\
+Rent Burden Groups & 0.9055118\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 Purity is a metric used to evaluate the quality of clustering by measuring the extent to which clusters contain data points of a single class. A higher purity score indicates that the clusters are more homogeneous concerning the given grouping.
 
@@ -634,199 +410,111 @@ Overall, the analysis suggests that while both income and rent burden are effect
 
 
 ### Heirarchical Clustering
-```{r hierarchical clustering, echo=FALSE, warning=FALSE}
-# Scale data for hierarchical clustering (excluding county_name)
-scaled_data_hc <- data %>%
-  select(-county_name) %>%
-  scale()
+![](Final-Report_files/figure-latex/hierarchical clustering-1.pdf)<!-- --> 
 
-# Calculate distance matrix and perform complete linkage clustering
-distance_matrix <- dist(scaled_data_hc, method = "euclidean")
-hc_complete <- hclust(distance_matrix, method = "complete")
-
-# Plot the dendrogram
-fviz_dend(hc_complete, k = 2,          # Number of clusters
-          cex = 0.4,                   # Label size
-          rect = TRUE,                 # Draw rectangles around clusters
-          rect_fill = TRUE,            # Fill rectangles with cluster colors
-          lwd = 0.6,                   # Thicker lines for clarity
-          show_labels = FALSE) +       # Hide all labels for clarity
-  labs(title = "Hierarchical Clustering Dendrogram (Complete Linkage)") +
-  theme_minimal(base_size = 10)
-```
-
-```{r hierarchical summary, echo=FALSE}
-# Assign clusters and calculate summary statistics for hierarchical clusters
-hc_clusters <- cutree(hc_complete, k = 2)
-
-data_clustered_hc <- data %>%
-  mutate(cluster_hc = as.factor(hc_clusters))
-
-# Summarize key statistics by hierarchical clusters
-cluster_summary_hc <- data_clustered_hc %>%
-  group_by(cluster_hc) %>%
-  summarise(
-    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
-    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
-    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
-    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
-    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
-    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
-    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
-  )
-
-# Display summary table
-kable(cluster_summary_hc, format = "latex", caption = "Summary Statistics by Hierarchical Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:7, width = "1.5cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:hierarchical summary}Summary Statistics by Hierarchical Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}>{\raggedleft\arraybackslash}p{1.5cm}r}
+\toprule
+cluster\_hc & Avg
+Median
+Income & Avg
+Income
+per Capita & Avg
+Rent
+> 50\% & Avg
+Rent
+30-35\% & Avg
+Confirmed
+Cases & Avg
+Deaths & Total
+Population\\
+\midrule
+1 & 49780.86 & 24786.04 & 1551.7 & 615.408 & 5078.896 & 89.052 & 65864.8\\
+2 & 56987.00 & 29420.25 & 91995.0 & 36522.250 & 217182.500 & 2529.000 & 2738352.8\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 #### Suitable Number of Clusters
 The Elbow Method plots the WSS (Within-Cluster Sum of Squares) for different number of clusters. WSS measures how tightly the data points are grouped around the centroids of the clusters. After a certain point, adding more clusters provides diminishing returns, meaning the reduction in WSS becomes negligible. The optimal number of clusters is found at the "elbow" point, where the rate of decrease in WSS sharply levels off. In the following elbow plot, the elbow occurs around 2 clusters. 
-```{r heirarchical optimal cluster elbow, echo=FALSE}
-# Elbow Method
-# Load necessary libraries
-library(cluster)
-library(factoextra)
-
-# Create the distance matrix and hierarchical clustering
-distance_matrix <- dist(scaled_data_hc, method = "euclidean")
-hc_complete <- hclust(distance_matrix, method = "complete")
-
-# Specify the range of clusters (e.g., 2 to 10)
-max_clusters <- 10
-
-# Use hcut to evaluate within-cluster sum of squares for hierarchical clustering
-fviz_nbclust(scaled_data_hc, hcut, method = "wss", k.max = max_clusters) +
-  labs(title = paste("Elbow Method for Hierarchical Clustering"))
-```
+![](Final-Report_files/figure-latex/heirarchical optimal cluster elbow-1.pdf)<!-- --> 
 
 The Silhouette Method evaluates how well each data point fits within its assigned cluster compared to other clusters. The Silhouette score ranges from -1 to 1, with values close to 1 meaning that the points are well-clustered. In the following Silhouette chart, the peak occurs at 2 clusters. 
-```{r heirarchical optimal cluster silhouette, echo=FALSE}
-# Silhouette Method
-# Assign clusters with cutree (for k = 2 to 6 clusters)
-silhouette_scores <- map(2:6, function(k) {
-  clusters <- cutree(hc_complete, k = k)
-  silhouette(clusters, distance_matrix)
-})
-
-# Visualize the silhouette scores for different numbers of clusters
-fviz_nbclust(scaled_data_hc, FUN = hcut, method = "silhouette") +
-  labs(title = "Silhouette Method for Hierarchical Clustering")
-```
+![](Final-Report_files/figure-latex/heirarchical optimal cluster silhouette-1.pdf)<!-- --> 
 
 
 After considering both of these models, it was decided to do 2 clusters. Because of the consistency across both methods, 2 cluters was the clear choice. 
 
 #### Unsupervised Evaluation
-```{r hierarchical silhouette analysis, echo=FALSE}
-# Calculate silhouette scores for hierarchical clusters
-silhouette_scores <- silhouette(hc_clusters, distance_matrix)
-
-# Plot silhouette scores
-fviz_silhouette(silhouette_scores) +
-  labs(title = "Silhouette Plot for Hierarchical Clustering (Complete Linkage)",
-       x = "Silhouette Width", y = "Clusters")
-```
-
-```{r hierarchical comaprison of linkage methods, echo=FALSE}
-# Perform clustering with alternative linkage methods
-hc_average <- hclust(distance_matrix, method = "average")
-hc_ward <- hclust(distance_matrix, method = "ward.D2")
-
-# Plot alternative linkage dendrograms
-par(mfrow = c(1, 2))  # Side-by-side layout
-fviz_dend(hc_average, k = 2, rect = TRUE, rect_fill = TRUE, main = "Hierarchical Clustering (Average Linkage)")
-fviz_dend(hc_ward, k = 2, rect = TRUE, rect_fill = TRUE, main = "Hierarchical Clustering (Ward's Linkage)")
-par(mfrow = c(1, 1))  # Reset layout
 
 ```
-
-```{r average silhouette width, echo=FALSE}
-# Calculate average silhouette widths for each linkage method
-silhouette_complete <- mean(silhouette(cutree(hc_complete, k = 2), distance_matrix)[, 2])
-silhouette_average <- mean(silhouette(cutree(hc_average, k = 2), distance_matrix)[, 2])
-silhouette_ward <- mean(silhouette(cutree(hc_ward, k = 2), distance_matrix)[, 2])
-
-# Summarize silhouette widths
-silhouette_summary <- data.frame(
-  Linkage_Method = c("Complete", "Average", "Ward's"),
-  Avg_Silhouette_Width = c(silhouette_complete, silhouette_average, silhouette_ward)
-)
-
-# Display silhouette summary table
-kable(silhouette_summary, format = "markdown", caption = "Average Silhouette Widths by Linkage Method") %>%
-  kable_styling(full_width = FALSE, font_size = 8.5)
+##   cluster size ave.sil.width
+## 1       1  250          0.87
+## 2       2    4          0.45
 ```
+
+![](Final-Report_files/figure-latex/hierarchical silhouette analysis-1.pdf)<!-- --> 
+
+![](Final-Report_files/figure-latex/hierarchical comaprison of linkage methods-1.pdf)<!-- --> ![](Final-Report_files/figure-latex/hierarchical comaprison of linkage methods-2.pdf)<!-- --> 
+
+\begingroup\fontsize{8.5}{10.5}\selectfont
+
+\begin{longtable}[t]{lr}
+\caption{\label{tab:average silhouette width}Average Silhouette Widths by Linkage Method}\\
+\toprule
+Linkage\_Method & Avg\_Silhouette\_Width\\
+\midrule
+Complete & 1.984252\\
+Average & 1.996063\\
+Ward's & 1.984252\\
+\bottomrule
+\end{longtable}
+\endgroup{}
 
 #### Ground Truth Feature
-```{r heirarchical ground truth, echo=FALSE}
-# Step 1: Assign hierarchical clusters (k = 2) to the data
-data_clustered_hc <- data %>%
-  mutate(cluster_hc = cutree(hc_complete, k = 2))
 
-# Step 2: Discretize COVID-19 deaths into categories (Low, Medium, High)
-data_clustered_hc <- data_clustered_hc %>%
-  mutate(death_category = cut(death_case_ratio, breaks = c(-Inf, 0.025, Inf), 
-                              labels = c("Lower", "Higher")))
-
-# Step 3: Create a contingency table to compare clusters with death categories
-cluster_comparison_hc <- table(data_clustered_hc$cluster_hc, data_clustered_hc$death_category)
-
-# Step 4: Print the contingency table
-print(cluster_comparison_hc)
+```
+##    
+##     Lower Higher
+##   1   145    105
+##   2     4      0
 ```
 
 #### Supervised Evaluation
 
-```{r hierarchical clustering supervised, echo=FALSE}
-# Scale data for hierarchical clustering using selected features
-scaled_data_hc_sup <- data %>%
-  select(death_case_ratio, income_per_capita) %>%
-  scale(center = TRUE, scale = TRUE)
+![](Final-Report_files/figure-latex/hierarchical clustering supervised-1.pdf)<!-- --> 
 
-# Perform hierarchical clustering with Ward's method
-distance_matrix <- dist(scaled_data_hc_sup, method = "euclidean")
-hc_ward <- hclust(distance_matrix, method = "ward.D")
-
-# Plot the dendrogram with Ward's method
-fviz_dend(hc_ward, k = 2,          # Number of clusters
-          cex = 0.4,               # Label size
-          rect = TRUE,             # Draw rectangles around clusters
-          rect_fill = TRUE,        # Fill rectangles with cluster colors
-          lwd = 0.6,               # Thicker lines for clarity
-          show_labels = FALSE) +   # Hide all labels for clarity
-  labs(title = "Hierarchical Clustering Dendrogram Supervised") +
-  theme_minimal(base_size = 10)
-```
-
-```{r hierarchical summary supervised, echo=FALSE}
-# Assign clusters based on the updated hierarchical clustering with Ward's method
-hc_clusters <- cutree(hc_ward, k = 2)
-
-# Add cluster labels to the original data
-data_clustered_hc <- data %>%
-  mutate(cluster_hc = as.factor(hc_clusters))
-
-# Summarize key statistics by hierarchical clusters
-cluster_summary_hc <- data_clustered_hc %>%
-  group_by(cluster_hc) %>%
-  summarise(
-    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
-    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
-    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
-    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
-    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
-    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
-    "Avg\nDeath Case Ratio" = mean(death_case_ratio, na.rm = TRUE),
-    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
-  )
-
-# Display the summary table
-kable(cluster_summary_hc, format = "latex", caption = "Summary Statistics by Hierarchical Cluster (Supervised)", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:hierarchical summary supervised}Summary Statistics by Hierarchical Cluster (Supervised)}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}r}
+\toprule
+cluster\_hc & Avg
+Median
+Income & Avg
+Income
+per Capita & Avg
+Rent
+> 50\% & Avg
+Rent
+30-35\% & Avg
+Confirmed
+Cases & Avg
+Deaths & Avg
+Death Case Ratio & Total
+Population\\
+\midrule
+1 & 42665.18 & 21229.01 & 829.9565 & 304.0609 & 3558.522 & 89.34783 & 0.0327401 & 39234.2\\
+2 & 55875.29 & 27862.27 & 4751.5108 & 1906.2878 & 12440.460 & 159.02158 & 0.0180368 & 164803.4\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 
 
@@ -840,33 +528,11 @@ The first part of the report clustered for the best performing affluent counties
 
 That is to say, each methodology, K-means and Hierarchical, in this second layer receives cluster "2" from its prior layer and applies itself again (e.g. The K-means method in this layer applies itself to cluster "2" of the K-means result for death to cases ratio and income per capita).
 
-```{r, echo=FALSE}
-# Load up data as r objects
-olivia_cluster_kmeans_data <- readRDS("Barcelo/RDS/olivia_cluster_kmeans.rds")
-olivia_cluster_kmeans_two_var <- olivia_cluster_kmeans_data %>% select(county_name, cluster)
-olivia_cluster_hierarchical_data <- readRDS("Barcelo/RDS/olivia_cluster_hierarchical.rds")
-olivia_cluster_hierarchical_two_var <- olivia_cluster_hierarchical_data %>% select(county_name, cluster_hc)
-county_data_set.scaled <- readRDS("Barcelo/RDS/county_data_set_cluster.scaled.rds")
-county_data_set <- readRDS("Barcelo/RDS/county_data_set_cluster.rds")
-```
 
-```{r, echo=FALSE}
 
-# Combine data to make tables we are going to use
-county_data_set <- county_data_set %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
 
-county_data_set.scaled <- county_data_set.scaled %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
-```
 
-```{r, echo=FALSE}
-# Filter for olivia second cluster only
 
-filtered_kmeans_county_data_set <- county_data_set %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
-filtered_kmeans_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
-
-filtered_hierarchical_county_data_set <- county_data_set %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
-filtered_hierarchical_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
-```
 
 ### Features for Clustering
 
@@ -877,40 +543,59 @@ The feature set for this second layer on which our K-means and Hierarchical meth
 
 ### Table of Features and Basic Statistics
 
-```{r, echo=FALSE}
-basic_stats_pop <- county_data_set %>% select(total_deaths, total_cases, total_population, area_sqmiles, pop_density, deaths_per_k, cases_per_k) %>% summary()
+\begingroup\fontsize{10}{12}\selectfont
 
-basic_stats_pop <- as.data.frame(basic_stats_pop)
-
-basic_stats_pop <- basic_stats_pop %>% separate(Freq , into = c("stat", "num"), sep = ":") %>% pivot_wider(names_from = stat, values_from = num) %>% rename(Feature = "Var2") %>% select(-Var1)
-
-basic_stats_pop$Feature <- c("Total Deaths", "Total Cases", "Total Population", "Area in Square Miles", "Population Density","Deaths per Thousand", "Cases per Thousand")
-
-kable(basic_stats_pop, format = "markdown", caption = "Basic Statistics for Features") %>%
-  kable_styling(full_width = FALSE, font_size = 10)
-```
+\begin{longtable}[t]{lllllll}
+\caption{\label{tab:unnamed-chunk-4}Basic Statistics for Features}\\
+\toprule
+Feature & Min. & 1st Qu. & Median & Mean & 3rd Qu. & Max.\\
+\midrule
+Total Deaths & 0.00 & 14.00 & 32.00 & 135.35 & 84.75 & 4024.00\\
+Total Cases & 1 & 505 & 1393 & 8854 & 3652 & 297629\\
+Total Population & 117 & 6835 & 18522 & 112738 & 51864 & 4680609\\
+Area in Square Miles & 127.2 & 835.7 & 908.7 & 1028.6 & 1043.4 & 6183.8\\
+Population Density & 0.1749 & 6.3404 & 21.8211 & 119.3629 & 66.3361 & 3003.4746\\
+\addlinespace
+Deaths per Thousand & 0.000 & 1.227 & 1.781 & 1.960 & 2.542 & 5.838\\
+Cases per Thousand & 8.547 & 60.369 & 78.495 & 80.639 & 97.758 & 179.111\\
+\bottomrule
+\end{longtable}
+\endgroup{}
 
 ### Scale of Measurement
 
-```{r, echo=FALSE}
-all_features_pop <- c("County Name", basic_stats_pop$Feature)
-scale_pop <- c("Nominal", rep("Ratio", 7))
-description_pop <- c("Name of the county", "Total Amount of Deaths in the County", "Total Amount of Cases in the County", "Total Population of the County", "Area of county in Square Miles", "Population Density in People per Square Mile", "Covid Deaths per Thousand Inhabitants", "Covid Cases per Thousand Inhabitants")
+\begingroup\fontsize{10}{12}\selectfont
 
-scale_of_measurement_pop <- cbind(all_features_pop, scale_pop, description_pop)
-scale_of_measurement_pop <- as.data.frame(scale_of_measurement_pop) %>% rename(Features = "all_features_pop", Scale = "scale_pop", Description = "description_pop")
-
-kable(scale_of_measurement_pop, format = "markdown", caption = "Measurement Scales for Features") %>%
-  kable_styling(full_width = FALSE, font_size = 10)
-```
+\begin{longtable}[t]{lll}
+\caption{\label{tab:unnamed-chunk-5}Measurement Scales for Features}\\
+\toprule
+Features & Scale & Description\\
+\midrule
+County Name & Nominal & Name of the county\\
+Total Deaths & Ratio & Total Amount of Deaths in the County\\
+Total Cases & Ratio & Total Amount of Cases in the County\\
+Total Population & Ratio & Total Population of the County\\
+Area in Square Miles & Ratio & Area of county in Square Miles\\
+\addlinespace
+Population Density & Ratio & Population Density in People per Square Mile\\
+Deaths per Thousand & Ratio & Covid Deaths per Thousand Inhabitants\\
+Cases per Thousand & Ratio & Covid Cases per Thousand Inhabitants\\
+\bottomrule
+\end{longtable}
+\endgroup{}
 
 
 ### Measures for Similarity/Distance
 
 Since the clustering uses K-means and Hierarchical methodologies, Euclidean distance is used. Here are first-five-counties-in-the-data-set's euclidean distance for population density and cases per thousand.
 
-```{r, echo=FALSE}
-dist(filtered_hierarchical_county_data_set %>% select(pop_density, cases_per_k) %>% slice_head(n = 5), method = "euclidean")
+
+```
+##           1         2         3         4
+## 2 98.126290                              
+## 3  6.201082 97.470224                    
+## 4 29.604521 70.963217 31.467442          
+## 5 52.011261 51.166822 49.634707 33.772758
 ```
 
 ### Normalization/Standardization
@@ -920,47 +605,33 @@ Numeric features in the data set were normalized using R's scale function, which
 ## Modeling and Evaluation
 ### K-Means Clustering
 
-```{r, echo=FALSE}
-counties_kmeans_pop_dens_et_cases_per_k <- filtered_kmeans_county_data_set %>% select(county_name, pop_density, cases_per_k)
-counties_kmeans_pop_dens_et_cases_per_k.scaled <- filtered_kmeans_county_data_set.scaled %>% select(county_name, pop_density, cases_per_k)
-```
 
-```{r, echo=FALSE}
-pop_dense_and_cases_kmeans <- kmeans(counties_kmeans_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), centers = 2)
 
-fviz_cluster(pop_dense_and_cases_kmeans, data = counties_kmeans_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)),
-             geom = "point", ellipse.type = "convex",
-             ggtheme = theme_minimal(), labelsize = 10) +
-  labs(title = "K-Means Clustering of Texas Counties (in cluster \"2\" of Prior K-means Layer)\nbased off Population Density and Cases per Thousand",
-       x = "Population Density", y = "Cases per Thousand")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-8-1.pdf)<!-- --> 
 
 Our K-means clustering seemingly divides the data into low cases-per-thousand and high cases-per-thousand.
 
 
-```{r, echo=FALSE}
-# Make data set include this kmeans cluster
 
-filtered_kmeans_county_data_set_clustered <- filtered_kmeans_county_data_set %>% mutate(matias_kmeans = as.factor((pop_dense_and_cases_kmeans$cluster)))
-filtered_kmeans_county_data_set_clustered.scaled <- filtered_kmeans_county_data_set.scaled %>% mutate(matias_kmeans = as.factor((pop_dense_and_cases_kmeans$cluster)))
-```
 
 #### Suitable Number of Clusters
 
 Elbow Method
 
-```{r, echo=FALSE}
-fviz_nbclust(counties_kmeans_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), kmeans, method = "wss") +
-  labs(title = "Elbow Method for Determining Optimal Clusters for Pop Density and\nCases per Thousand for K-means Clustering") +
-  geom_vline(xintercept = 2, color = "blue", linetype = "dashed", size = 1)
+
 ```
+## Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+## i Please use `linewidth` instead.
+## This warning is displayed once every 8 hours.
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.
+```
+
+![](Final-Report_files/figure-latex/unnamed-chunk-10-1.pdf)<!-- --> 
 
 Silhouette Method
 
-```{r, echo=FALSE}
-fviz_nbclust(counties_kmeans_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), kmeans, method = "silhouette") +
-  labs(title = "Silhouette Method or Determining Optimal Clusters for Pop Density\nand Cases per Thousand for Kmeans Clustering")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-11-1.pdf)<!-- --> 
 
 Our Elbow and Silhouette methods suggest our optimal amount of clusters for K-means is 2 clusters.
 
@@ -968,36 +639,38 @@ Our Elbow and Silhouette methods suggest our optimal amount of clusters for K-me
 
 Silhouette Width
 
-```{r, echo=FALSE}
-library(cluster)
-```
 
-```{r, echo=FALSE}
-plot(silhouette(pop_dense_and_cases_kmeans$cluster, dist(counties_kmeans_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)))), main = "Silhouette Plot of Population Density by Euclidean Distance\nin Current Layer Kmeans Clustering")
-```
+
+![](Final-Report_files/figure-latex/unnamed-chunk-13-1.pdf)<!-- --> 
 
 Our Average Silhouette width is not close to 1, which means that the centroids may not be as close to the middle of the cluster as they could be; however, the distribution of data points are fair.
 
 Summary Statistics
 
-```{r, echo=FALSE}
-summary_data_kmeans <- olivia_cluster_kmeans_data %>% rename(olivia_cluster_kmeans = cluster) %>% left_join(county_data_set %>% select(county_name, pop_density, cases_per_k, deaths_per_k), by = join_by(county_name)) %>% left_join(filtered_kmeans_county_data_set_clustered %>% select(county_name, matias_kmeans), by = join_by(county_name))
-
-k_means_cluster_summary <- summary_data_kmeans %>%
-  group_by(matias_kmeans) %>%
-  drop_na() %>%
-  rename(layer_2_kmeans = "matias_kmeans") %>%
-  summarise(
-    "Avg\nCases\nper\nthousand" = mean(cases_per_k, na.rm = TRUE),
-    "Avg\nDeaths\nper\nthousand" = mean(deaths_per_k, na.rm = TRUE),
-    "Avg\nPopulation\nDensity" = mean(pop_density, na.rm = TRUE),
-    "Number\nof\nCounties" = n()
-  )
-
-kable(k_means_cluster_summary, format = "latex", caption = "Summary Statistics for K-means Cluster based on Population Density and Cases per Thousand", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:unnamed-chunk-14}Summary Statistics for K-means Cluster based on Population Density and Cases per Thousand}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}}
+\toprule
+layer\_2\_kmeans & Avg
+Cases
+per
+thousand & Avg
+Deaths
+per
+thousand & Avg
+Population
+Density & Number
+of
+Counties\\
+\midrule
+1 & 116.9643 & 2.809818 & 42.08026 & 53\\
+2 & 66.9696 & 2.213788 & 40.84501 & 100\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 As mentioned earlier, the second layer of K-means clustering seemingly prioritized cases-per-thousands over population density.
 
@@ -1007,30 +680,21 @@ As mentioned earlier, the second layer of K-means clustering seemingly prioritiz
 
 ### Heirarchical Clustering
 
-```{r, echo=FALSE}
-counties_hierarchical_pop_dens_et_cases_per_k <- filtered_hierarchical_county_data_set %>% select(county_name, pop_density, cases_per_k)
-counties_hierarchical_pop_dens_et_cases_per_k.scaled <- filtered_hierarchical_county_data_set.scaled %>% select(county_name, pop_density, cases_per_k)
-```
+
 
 Dendogram
 
-```{r, echo=FALSE}
-pop_dense_and_cases_hierarchical <- hclust(dist(counties_hierarchical_pop_dens_et_cases_per_k.scaled), method = "complete")
-fviz_dend(pop_dense_and_cases_hierarchical, show_labels = FALSE, main = "Hierarchical Clustering based off Population Density and Cases per Thousand")
+
+```
+## Warning in dist(counties_hierarchical_pop_dens_et_cases_per_k.scaled): NAs
+## introduced by coercion
 ```
 
-```{r, echo=FALSE}
-fviz_dend(pop_dense_and_cases_hierarchical, k = 2, show_labels = FALSE, main = "Hierarchical Clustering based off Population Density and Cases per Thousand")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-16-1.pdf)<!-- --> 
 
-```{r, echo=FALSE}
-pop_dense_and_cases_hierarchical_cut <- cutree(pop_dense_and_cases_hierarchical, k = 2)
+![](Final-Report_files/figure-latex/unnamed-chunk-17-1.pdf)<!-- --> 
 
-fviz_cluster(list(data = counties_hierarchical_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), cluster = pop_dense_and_cases_hierarchical_cut), geom = "point", ellipse.type = "convex",
-             ggtheme = theme_minimal(), labelsize = 10) +
-  labs(title = "Hierarchical Clustering of Texas Counties (in cluster \"2\" of Prior Hierarchical Layer)\nbased off Population Density and Cases per Thousand",
-       x = "Population Density", y = "Cases per Thousand")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-18-1.pdf)<!-- --> 
 
 The second layer Hierarchical clustering seemingly divides the data into high and low population density.
 
@@ -1038,56 +702,50 @@ The second layer Hierarchical clustering seemingly divides the data into high an
 
 Elbow
 
-```{r, echo=FALSE}
-fviz_nbclust(counties_hierarchical_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), hcut, method = "wss") +
-  labs(title = "Elbow Method for Determining Optimal Clusters for Pop Density and\nCases per Thousand for Hierarchical Clustering") +
-  geom_vline(xintercept = 2, color = "blue", linetype = "dashed", size = 1)
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-19-1.pdf)<!-- --> 
 
 Silhouette Method
 
-```{r, echo=FALSE}
-fviz_nbclust(counties_hierarchical_pop_dens_et_cases_per_k.scaled %>% select(where(is.numeric)), hcut, method = "silhouette") +
-  labs(title = "Silhouette Method or Determining Optimal Clusters for Pop Density\nand Cases per Thousand for Hierarchical Clustering")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-20-1.pdf)<!-- --> 
 
 Our Elbow and Silhouette methods suggest our Hierarchical Dendogram be cut at 2 clusters.
 
 #### Unsupervised Evaluation
 
-```{r, echo=FALSE}
-filtered_hierarchical_county_data_set_clustered <- filtered_hierarchical_county_data_set %>% mutate(matias_hierarchical = pop_dense_and_cases_hierarchical_cut)
-filtered_hierarchical_county_data_set_clustered.scaled <- filtered_hierarchical_county_data_set.scaled %>% mutate(matias_hierarchical = pop_dense_and_cases_hierarchical_cut)
-```
+
 
 Silhouette Plot
 
-```{r, echo=FALSE}
-plot(silhouette(pop_dense_and_cases_hierarchical_cut, dist(counties_hierarchical_pop_dens_et_cases_per_k.scaled%>% select(where(is.numeric)))), main = "Silhouette Plot of Population Density by Euclidean Distance\nin Current Layer Hierarchical Clustering")
-```
+![](Final-Report_files/figure-latex/unnamed-chunk-22-1.pdf)<!-- --> 
 
 Our average silhouette widths are close to 1, which means the centroids are close to the center of the clusters; however, the distribution of data points in the cluster are very lop sided in favor of the low population density cluster.
 
 Summary Statistics
 
-```{r, echo=FALSE}
-summary_data_hierarchical <- olivia_cluster_kmeans_data %>% rename(olivia_cluster_kmeans = cluster) %>% left_join(county_data_set %>% select(county_name, pop_density, cases_per_k, deaths_per_k), by = join_by(county_name)) %>% left_join(filtered_hierarchical_county_data_set_clustered %>% select(county_name, matias_hierarchical), by = join_by(county_name))
-
-hierarchical_cluster_summary <- summary_data_hierarchical%>%
-  group_by(matias_hierarchical) %>%
-  drop_na() %>%
-  rename(layer_2_hierarchical = "matias_hierarchical") %>%
-  summarise(
-    "Avg\nCases\nper\nthousand" = mean(cases_per_k, na.rm = TRUE),
-    "Avg\nDeaths\nper\nthousand" = mean(deaths_per_k, na.rm = TRUE),
-    "Avg\nPopulation\nDensity" = mean(pop_density, na.rm = TRUE),
-    "Number\nof\nCounties" = n()
-  )
-
-kable(hierarchical_cluster_summary, format = "latex", caption = "Summary Statistics for Hierarchical Cluster based on Population Density and Cases per Thousand", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:unnamed-chunk-23}Summary Statistics for Hierarchical Cluster based on Population Density and Cases per Thousand}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}}
+\toprule
+layer\_2\_hierarchical & Avg
+Cases
+per
+thousand & Avg
+Deaths
+per
+thousand & Avg
+Population
+Density & Number
+of
+Counties\\
+\midrule
+1 & 76.95841 & 1.426565 & 130.5207 & 136\\
+2 & 85.79536 & 0.934339 & 2715.3660 & 3\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 As mentioned earlier, the distribution of number of counties in a cluster could be better; however, the three counties found in the second county have a notably low deaths per thousand despite clustering for cases per thousand.
 
@@ -1143,37 +801,81 @@ After analyzing our model's results, if a client has an interest in opening a bu
 
 After taking cluster "1" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
 
-```{r, echo=FALSE}
-top_3_kmeans <- summary_data_kmeans %>% filter(matias_kmeans == 1) %>% rename(layer_2_kmeans = "matias_kmeans") %>% arrange(desc(pop_density)) %>% slice_head(n = 3) %>% select(county_name)
-
-# Display the summary statistics table with narrower columns and smaller font size
-kable(top_3_kmeans, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:unnamed-chunk-24}Summary Statistics by Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}}
+\toprule
+county\_name\\
+\midrule
+El Paso County\\
+Wichita County\\
+Potter County\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 The three results in cluster "2" for the second layer hierarchical clustering were:
 
-```{r, echo=FALSE}
-top3_hierarchical <- summary_data_hierarchical %>% filter(matias_hierarchical == 2) %>% rename(layer_2_hierarchical = "matias_hierarchical") %>% arrange(desc(pop_density)) %>% select(county_name)
+\begin{table}[!h]
+\centering
+\caption{\label{tab:unnamed-chunk-25}Summary Statistics by Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}>{}p{1.25 cm}}
+\toprule
+county\_name\\
+\midrule
+Dallas County\\
+Harris County\\
+Tarrant County\\
+\bottomrule
+\end{tabular}
+\end{table}
 
-# Display the summary statistics table with narrower columns and smaller font size
-kable(top3_hierarchical, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
+
+```
+## Joining with `by = join_by(county_name)`
 ```
 
-```{r, echo=FALSE}
-top_counties <- top_3_kmeans %>% full_join(top3_hierarchical)
-
-summary_data_recommendation <- summary_data_kmeans %>% filter(county_name %in% top_counties$county_name) %>% arrange(desc(pop_density)) %>% select(county_name, total_pop, median_income, income_per_capita, rent_over_50_percent, rent_30_to_35_percent, confirmed_cases, deaths, cases_per_k, deaths_per_k, death_case_ratio, total_pop, pop_density) %>% rename("County\nName" = "county_name", "Total\nPopulation" = "total_pop", "Median\nIncome" = "median_income", "Income\nPer\nCapita" = "income_per_capita", "Rent\n30-35%" = "rent_30_to_35_percent", "Rent\nOver\n50%" = "rent_over_50_percent", "Confirmed\nCases" = "confirmed_cases", "Confirmed\nDeaths" = "deaths", "Cases\nper\nThousand" = "cases_per_k", "Deaths\nPer\nThousand"= "deaths_per_k", "Death\nCase\nRatio" = "death_case_ratio", "Population\nDensity" = "pop_density")
-
-# Display the summary statistics table with narrower columns and smaller font size
-
-kable(summary_data_recommendation, format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
-  column_spec(0:8, width = "1.25 cm")
-```
+\begin{table}[!h]
+\centering
+\caption{\label{tab:unnamed-chunk-26}Summary Statistics by Cluster}
+\centering
+\fontsize{7}{9}\selectfont
+\begin{tabular}[t]{>{\raggedright\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}>{\raggedleft\arraybackslash}p{1.25 cm}rrrr}
+\toprule
+County
+Name & Total
+Population & Median
+Income & Income
+Per
+Capita & Rent
+Over
+50\% & Rent
+30-35\% & Confirmed
+Cases & Confirmed
+Deaths & Cases
+per
+Thousand & Deaths
+Per
+Thousand & Death
+Case
+Ratio & Population
+Density\\
+\midrule
+Dallas County & 2552213 & 53626 & 29810 & 95830 & 38717 & 234625 & 2453 & 94.11149 & 1.0054777 & 0.0104550 & 3003.4746\\
+Harris County & 4525519 & 57791 & 30856 & 158668 & 61305 & 286356 & 3825 & 63.58767 & 0.8597172 & 0.0133575 & 2741.9815\\
+Tarrant County & 1983675 & 62532 & 30857 & 56570 & 24381 & 195518 & 1798 & 99.68693 & 0.9378221 & 0.0091961 & 2400.6419\\
+El Paso County & 834825 & 43244 & 19950 & 19775 & 9431 & 107552 & 1940 & 131.58445 & 2.4662003 & 0.0180378 & 825.7745\\
+Wichita County & 131778 & 45776 & 23263 & 4295 & 1618 & 13325 & 260 & 102.79674 & 2.1414410 & 0.0195122 & 210.5728\\
+\addlinespace
+Potter County & 121230 & 41852 & 21941 & 4276 & 1371 & 15947 & 302 & 136.81195 & 2.6875586 & 0.0189377 & 130.2557\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 *Describe your results. What recommendations can you formulate based on the clustering results? How do these recommendations relate to the ones already presented in report 1? What findings are the most interesting to your stakeholder?*
 
