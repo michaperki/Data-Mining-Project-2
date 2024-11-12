@@ -840,34 +840,6 @@ The first part of the report clustered for the best performing affluent counties
 
 That is to say, each methodology, K-means and Hierarchical, in this second layer receives cluster "2" from its prior layer and applies itself again (e.g. The K-means method in this layer applies itself to cluster "2" of the K-means result for death to cases ratio and income per capita).
 
-```{r, echo=FALSE}
-# Load up data as r objects
-olivia_cluster_kmeans_data <- readRDS("Barcelo/RDS/olivia_cluster_kmeans.rds")
-olivia_cluster_kmeans_two_var <- olivia_cluster_kmeans_data %>% select(county_name, cluster)
-olivia_cluster_hierarchical_data <- readRDS("Barcelo/RDS/olivia_cluster_hierarchical.rds")
-olivia_cluster_hierarchical_two_var <- olivia_cluster_hierarchical_data %>% select(county_name, cluster_hc)
-county_data_set.scaled <- readRDS("Barcelo/RDS/county_data_set_cluster.scaled.rds")
-county_data_set <- readRDS("Barcelo/RDS/county_data_set_cluster.rds")
-```
-
-```{r, echo=FALSE}
-
-# Combine data to make tables we are going to use
-county_data_set <- county_data_set %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
-
-county_data_set.scaled <- county_data_set.scaled %>% select(-kmeans_cluster, -hierarchachal_cluster) %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
-```
-
-```{r, echo=FALSE}
-# Filter for olivia second cluster only
-
-filtered_kmeans_county_data_set <- county_data_set %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
-filtered_kmeans_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
-
-filtered_hierarchical_county_data_set <- county_data_set %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
-filtered_hierarchical_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
-```
-
 ### Features for Clustering
 
 The feature set for this second layer on which our K-means and Hierarchical methods apply themselves are population density and COVID-19 cases per thousand. This is done in order to find the highest population density counties with the lowest amount of COVID-19 cases.
@@ -875,6 +847,157 @@ The feature set for this second layer on which our K-means and Hierarchical meth
   - **Population Density** Found by first obtaining the total population for each Texas county using the Tidycensus R package, and then using census.gov's 2023 Geographic info API to retrieve the variable AREALAND_SQMI (land area in square miles) for each county in Texas. The total population for each county was divided by the total land area in square miles to create the population density feature (people per square mile of land).
 
   - **Cases per Thousand** Found by taking total cases from COVID-19 Texas data set and dividing by total population for each county.
+  
+```{r, echo = FALSE}
+library(tidycensus)
+library(httr)
+library(jsonlite)
+```
+
+```{r, echo = FALSE}
+# preprocessing steps
+
+# load up from csv file
+
+COVID_19_cases_TX <- read.csv("data/COVID-19_cases_TX.csv")
+
+# Remove statewide unallocated
+
+COVID_19_cases_TX <- COVID_19_cases_TX %>% filter(county_name != "Statewide Unallocated")
+
+# get total population from census data
+
+census_data <- get_acs(
+  geography = "county",
+  variables = c(total_population = "B01003_001"),
+  state = "TX",
+  year = 2020,
+  survey = "acs5"
+)
+
+# make census data compatible with COVID_19_cases_TX
+
+census_data <- census_data |>
+  select(NAME, variable, estimate) |>
+  separate(NAME, into = c("county_name", "state"), sep = ", ") |>
+  pivot_wider(names_from = "variable", values_from = "estimate")
+
+# Create a table for each county in Texas containing total_deaths, total_cases, total_population, cases per thousand, deaths per thousand
+
+county_texas_total_data <- COVID_19_cases_TX |>
+  group_by(county_name)|>
+  summarize(total_deaths = max(deaths), total_cases = max(confirmed_cases)) |>
+  left_join(census_data, by = "county_name") |>
+  mutate(cases_per_k = (total_cases/total_population) * 1000, deaths_per_k = (total_deaths/total_population) * 1000) %>%
+  select(-state)
+  # remove unwanted "state" feature
+
+```
+
+```{r, echo = FALSE}
+# Load up data using census.gov API
+
+county_names_to_numbers_in_census_api_call <- "https://api.census.gov/data/2023/geoinfo?get=NAME&for=county:*&in=state:48"
+county_area_in_sq_miles_in_census_api_with_county_num_call <- "https://api.census.gov/data/2023/geoinfo?get=AREALAND_SQMI&for=county:*&in=state:48"
+
+county_name_to_number_response <- httr::GET(county_names_to_numbers_in_census_api_call)
+county_area_in_sq_miles_response <- httr::GET(county_area_in_sq_miles_in_census_api_with_county_num_call)
+```
+
+
+```{r, echo = FALSE}
+
+# Make data set from county name API call
+
+# Unpacks the data
+content_county_name <- content(county_name_to_number_response)
+
+# Makes numpy like data into an r matrix
+content_county_name_matrix <- do.call(rbind, content_county_name)
+
+# Converts to data frame
+county_name_dataframe <- as.data.frame(content_county_name_matrix)
+
+# Since each column is really just a list, use unnest to convert list to rows
+county_name_dataframe <- county_name_dataframe %>% unnest(col = everything())
+
+# Rename columns
+table_header = c(NAME = "V1", state = "V2", county_num = "V3")
+county_name_dataframe <- rename(county_name_dataframe, all_of(table_header))
+
+
+county_name_dataframe <- county_name_dataframe %>% slice(-1) %>% separate(NAME, into = c("county_name", "STATE NAME"), sep = ",") %>% select(county_name, county_num)
+county_name_dataframe %>% head()
+```
+
+```{r, echo = FALSE}
+# Making data set from area in sq miles API call
+
+# Get content (this is a numpy like array)
+content_area_sq_miles = content(county_area_in_sq_miles_response)
+
+# Transform into dataframe
+content_area_sq_miles_data_frame <- as.data.frame(do.call(rbind, content_area_sq_miles)) %>% unnest(col = everything())
+
+column_header = c(area_sqmiles = "V1", county_num = "V3")
+
+content_area_sq_miles_data_frame <- content_area_sq_miles_data_frame %>% slice(-1) %>% rename(all_of(column_header)) %>% select(area_sqmiles, county_num)
+
+content_area_sq_miles_data_frame <- content_area_sq_miles_data_frame %>% left_join(county_name_dataframe, by = "county_num") %>% select(county_name, area_sqmiles) %>% mutate(area_sqmiles = as.numeric(area_sqmiles))
+
+content_area_sq_miles_data_frame %>% head()
+```
+
+
+```{r, echo = FALSE}
+# Make sure there are the same number of rows in both data sets
+nrow(content_area_sq_miles_data_frame) == nrow(county_texas_total_data)
+```
+
+```{r, echo = FALSE}
+# Add area in square milage to prior county data set and calculate population density
+county_data_set_with_pop_density <- county_texas_total_data %>%
+                                    left_join(content_area_sq_miles_data_frame, by = "county_name") %>%
+                                    mutate(pop_density = total_population/area_sqmiles)
+
+# Scaled/Normalized Data
+county_data_set_with_pop_density.scaled <- county_data_set_with_pop_density %>% mutate(across(where(is.numeric), ~ as.numeric(scale(.))))
+```
+
+```{r, echo = FALSE}
+# county_data_set.scaled <- readRDS("Barcelo/RDS/county_data_set_cluster.scaled.rds")
+# county_data_set <- readRDS("Barcelo/RDS/county_data_set_cluster.rds")
+```
+
+```{r, echo=FALSE}
+# Rename some data to make code work because I originally used wicked, evil, and confusing RDS files muahahaha
+
+olivia_cluster_kmeans_data <- data_clustered_2
+olivia_cluster_kmeans_two_var <- olivia_cluster_kmeans_data %>% select(county_name, cluster)
+olivia_cluster_hierarchical_data <- data_clustered_hc
+olivia_cluster_hierarchical_two_var <- olivia_cluster_hierarchical_data %>% select(county_name, cluster_hc)
+
+county_data_set <- county_data_set_with_pop_density
+county_data_set.scaled <- county_data_set_with_pop_density.scaled
+```
+
+```{r, echo=FALSE}
+
+# Combine data to make tables we are going to use
+county_data_set <- county_data_set %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
+
+county_data_set.scaled <- county_data_set.scaled %>% left_join(olivia_cluster_kmeans_two_var, by = "county_name") %>% left_join(olivia_cluster_hierarchical_two_var, by = "county_name") %>% rename(olivia_cluster_kmeans = "cluster") %>% rename(olivia_cluster_hc = "cluster_hc")
+```
+
+```{r, echo=FALSE}
+
+# Filter for olivia second cluster only
+filtered_kmeans_county_data_set <- county_data_set %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
+filtered_kmeans_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_kmeans == 2) %>% select(-olivia_cluster_hc)
+
+filtered_hierarchical_county_data_set <- county_data_set %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
+filtered_hierarchical_county_data_set.scaled <- county_data_set.scaled %>% filter(olivia_cluster_hc == 2) %>% select(-olivia_cluster_kmeans)
+```
 
 ### Table of Features and Basic Statistics
 
@@ -936,7 +1059,7 @@ fviz_cluster(pop_dense_and_cases_kmeans, data = counties_kmeans_pop_dens_et_case
        x = "Population Density", y = "Cases per Thousand")
 ```
 
-The clustering seemingly divides counties into either high cases per thousand or low cases per thousand.
+The clustering seemingly divides counties by population density
 
 Summary Statistics:
 ```{r, echo=FALSE}
@@ -965,9 +1088,9 @@ kable(k_means_cluster_summary, format = "latex", caption = "Summary Statistics f
   column_spec(0:8, width = "1.25 cm")
 ```
 
-  - **K-means Cluster 1: ** This cluster has a higher average cases and deaths per thousand with an average population density similar to that of the second cluster. This could be attributed as a "COVID-19 low performing" cluster of counties.
+  - **K-means Cluster 1: ** This cluster has a higher average cases and deaths per thousand with an average population density much lower to that of the second cluster. This could be attributed as a "COVID-19 low population density" cluster of counties.
   
-  - **K-mean Cluster 2: ** This cluster has a lower average cases and deaths per thousand with an average population density similar to that of the first cluster. This could be attributed as a "COVID-19 high performing" cluster of counties.
+  - **K-mean Cluster 2: ** This cluster has a lower average cases and deaths per thousand with an average population density similar to that of the first cluster. This could be attributed as a "COVID-19 high population" cluster of counties.
 
 #### Suitable Number of Clusters
 
@@ -1002,8 +1125,8 @@ plot(silhouette(pop_dense_and_cases_kmeans$cluster, dist(counties_kmeans_pop_den
 
 Our Average Silhouette width is not close to 1, which means that the centroids may not be as close to the middle of the cluster as they could be; however, the distribution of data points are fair.
 
-  - **K-means Cluster 1:** With 53 points and an average Silhoutte plot of 0.51. The Cohesion is fair.
-  - **K-means Cluster 2** With 100 points and an average Silhoutte plot of 0.60. The Cohesion of this Silhouette plot could be interpreted as better than the prior cluster but not far better.
+  - **K-means Cluster 1:** With 95 points and an average Silhoutte plot of 0.77. The Cohesion is fair.
+  - **K-means Cluster 2** With 6 points and an average Silhoutte plot of 0.39. This Silhouette plot could be interpreted as not very cohesive.
 
 ### Heirarchical Clustering
 
@@ -1111,7 +1234,7 @@ Since the model is clustering for various factors such as affluence, COVID perfo
   - **Feature 3: Median Income** 33.3% Weight
   - **Feature 4: Population Density** 33.3% Weight
   
-After normalizing using a z-score distribution, since a lower standard deviation indicates a better performance for both cases and deaths per thousand, the negative of COVID performance features will be subtracted instead of summed.
+After normalizing using a z-score distribution, since a lower standard deviation indicates a better performance for both cases and deaths per thousand, COVID performance features will be subtracted instead of summed.
 
 Mathematically, if our truth feature is defined as $\beta$, with each normalized numeric feature defined as f and weight number defined as w, the formula would be:
 
@@ -1147,15 +1270,11 @@ $h_1, h_2 \subset H_2$
 
 \vspace{10pt}
 
-The second layer of K-means clustering divided the counties according to low cases per thousand, $k_1$, and high cases per thousand, $k_2$. The second layer of Hierarchical clustering divided the data according to low population density, $h_1$, and high population density $h_2$.  
+Both methods of clustering divided the data according to low population density, $k_1$ and $h_1$, and high population density $k_2$ $h_2$.  
 
 \vspace{5pt}
 
-Since a client likely wants a subset of counties with low cases per thousand, indicating a better performance during the COVID-19 pandemic, $k_1$ could be given as a subset of affluent, high COVID-19 performing group of counties.
-
-\vspace{5pt}
-
-Since a client likely wants a subset of counties with a higher population density, to make more money serving more people, $h_2$ could be given as a subset of affluent, high population density group of counties.  
+Since a client likely wants a subset of counties with a higher population density, to make more money serving more people, $k_2$ and $h_2$ could be given as a subsets of affluent, high population density group of counties.  
 
 \vspace{5pt}
 
@@ -1211,8 +1330,9 @@ subset_K_2 <- subset_K_2 %>% mutate(beta = -.1665 * deaths_per_k - .1665 * cases
 subset_H_2 <- subset_H_2 %>% mutate(beta = -.1665 * deaths_per_k - .1665 * cases_per_k + .333 * median_income + .333 * pop_density)
 
 # Subsets divided into two to equal to the same magnitude as subsets
-subset_a_1 <- subset_K_2 %>% arrange(desc(beta)) %>% slice_head(n = nrow(subset_kmeans_1))
-subset_a_2 <- subset_K_2 %>% arrange(desc(beta)) %>% slice_tail(n = nrow(subset_kmeans_2))
+subset_a_1 <- subset_K_2 %>% arrange(desc(beta)) %>% slice_tail(n = nrow(subset_kmeans_1))
+# We slice head because top results are in k2
+subset_a_2 <- subset_K_2 %>% arrange(desc(beta)) %>% slice_head(n = nrow(subset_kmeans_2))
 
 subset_b_1 <- subset_H_2 %>% arrange(desc(beta)) %>% slice_tail(n = nrow(subset_hierarchical_1))
 # We slice head because top results are in h2
@@ -1254,7 +1374,7 @@ $N = |K_2|, M = 2, C = k, A = a$
 
 \vspace{5pt}
 
-$purity \approx0.654$
+$purity \approx0.96$
 
 \vspace{10pt}
 
@@ -1270,13 +1390,76 @@ $purity \approx0.986$
 
 \vspace{10pt}
 
-With a purity of 1 being a perfect match of clusters, subset k has a slight above average purity, while subset 2 has a near perfect purity. The high purity in subset h can be attributed to the magnitude of $h_2$ being 3 counties. If 136 of the 139 counties in $H_2$ are in subset $h_1$, of course there is going to be a high rate of purity. Therefore, a more interesting comparison for $h_2$ would be just comparing that cluster of three with the top three "goodness" results of $b_2$.
+With a purity of 1 being a perfect match of clusters, both k and h have very high purities. The high purities in these subsets can be attributed to the magnitude of $k_2$ and $h_2$ being very low, with 6 and 3 counties respectively. If the vast majority of counties are in subset $k_1$ and $h_1$, of course there is going to be a high rate of purity. Therefore, a more interesting comparison for $k_2$ and $h_2$ would be just comparing them to their equivalent obtained using the truth feature $a_2$ and $b_2$, counting the number of times they intersect, and dividing by the magnitude of the subsets.
 
 \vspace{10pt}
 
-$comparison = \frac{1}{3}|h_2 \cap b_2|$
+```{r, echo = FALSE}
+comparison_for_k2 <- (1/6) * length(intersect(subset_kmeans_2$county_name, subset_a_2$county_name))
+```
 
-\vspace{10pt}
+
+Subset $k_2$ consists of
+
+\vspace{5pt}
+  
+  -**Harris County**
+  
+  \vspace{5pt}
+  
+  -**Collin County**
+  
+  \vspace{5pt}
+  
+  -**Travis County**
+  
+  \vspace{5pt}
+  
+  -**Dallas County**
+  
+  \vspace{5pt}
+  
+  -**Tarrant County**
+  
+  \vspace{5pt}
+  
+  -**Bexar County**
+  
+  \vspace{5pt}
+
+\vspace{5pt}
+
+Subset $a_2$ consists of
+
+\vspace{5pt}
+  
+  -**Harris County**
+  
+  \vspace{5pt}
+  
+  -**Collin County**
+  
+  \vspace{5pt}
+  
+  -**Fort Bend County**
+  
+  \vspace{5pt}
+  
+  -**Dallas County**
+  
+  \vspace{5pt}
+  
+  -**Tarrant County**
+  
+  \vspace{5pt}
+  
+  -**Denton County**
+  
+  \vspace{5pt}
+
+The only difference in the two subsets are Travis and Bexar county are in subset $k_2$ while Fort Bend and Denton county are in $a_2$. Four of the six counties found through our clustering were found also found in our truth feature, which is 66.7%.
+
+\vspace{5pt}
 
 ```{r, echo = FALSE}
 comparison_for_h2 <- (1/3) * length(intersect(subset_hierarchical_2$county_name, subset_b_2$county_name))
@@ -1313,7 +1496,9 @@ Subset $b_2$ conists of
   
 \vspace{5pt}
 
-Two of the three counties found through our clustering were found also found in our truth feature, which is 66.7%. This is a more accurate metric than purity because of how the data was divided.
+Two of the three counties found through our clustering were found also found in our truth feature, which is 66.7%. 
+
+Therefore, according to the truth feature, these clusters are both 66.7% accurate. (Using this metric makes more sense than purity because the low number of relevant results)
 
 \newpage
 
@@ -1361,10 +1546,10 @@ Two of the three counties found through our clustering were found also found in 
 
 After analyzing our model's results, if a client has an interest in opening a business in an affluent, high land population density, and high COVID-19 performing county in Texas, they should consider the following counties.
 
-After taking cluster "1" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
+After taking cluster "2" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
 
 ```{r, echo=FALSE}
-top_3_kmeans <- summary_data_kmeans %>% filter(matias_kmeans == 1) %>% rename(layer_2_kmeans = "matias_kmeans") %>% arrange(desc(pop_density)) %>% slice_head(n = 3) %>% select(county_name)
+top_3_kmeans <- summary_data_kmeans %>% filter(matias_kmeans == 2) %>% rename(layer_2_kmeans = "matias_kmeans") %>% arrange(desc(pop_density)) %>% select(county_name)
 
 # Display the summary statistics table with narrower columns and smaller font size
 kable(top_3_kmeans, format = "latex", caption = "Second Layer K-means Clustering Top 3 Counties", booktabs = TRUE) %>%
