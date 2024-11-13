@@ -7,7 +7,10 @@ output:
     fig_caption: true
     toc: true
     toc_depth: 4
-header-includes: \usepackage{caption}
+header-includes: 
+  - \usepackage{caption}
+  - \usepackage{float}
+
 ---
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(
@@ -378,7 +381,6 @@ kable(cluster_comparison, format = "latex", caption = "Contingency Table of Clus
   kable_styling(latex_options = c("hold_position"), font_size = 8, full_width = FALSE)
 ```
 
-\captionof{figure}{Ground Truth Cluster Comparison}
 
 \vspace{10pt}
 
@@ -721,8 +723,6 @@ The Elbow Method, Figure 9, plots the WSS (Within-Cluster Sum of Squares) for di
 ```{r heirarchical optimal cluster elbow, echo=FALSE}
 # Elbow Method
 # Load necessary libraries
-library(cluster)
-library(factoextra)
 
 # Create the distance matrix and hierarchical clustering
 distance_matrix <- dist(scaled_data_hc, method = "euclidean")
@@ -744,16 +744,27 @@ The Silhouette Method, Figure 10, evaluates how well each data point fits within
 \vspace{10pt}
 
 ```{r heirarchical optimal cluster silhouette, echo=FALSE}
-# Silhouette Method
-# Assign clusters with cutree (for k = 2 to 6 clusters)
-silhouette_scores <- map(2:6, function(k) {
+
+# Calculate silhouette scores for different numbers of clusters
+silhouette_scores <- purrr::map(2:6, function(k) {
   clusters <- cutree(hc_complete, k = k)
-  silhouette(clusters, distance_matrix)
+  sil <- silhouette(clusters, distance_matrix)
+  if (!is.null(sil)) mean(sil[, 3]) else NA  # Calculate average silhouette width or NA
 })
 
-# Visualize the silhouette scores for different numbers of clusters
-fviz_nbclust(scaled_data_hc, FUN = hcut, method = "silhouette") +
-  labs(title = "Silhouette Method for Hierarchical Clustering")
+# Plot silhouette scores
+silhouette_data <- data.frame(
+  k = 2:6,
+  avg_silhouette_width = unlist(silhouette_scores)
+)
+
+ggplot(silhouette_data, aes(x = k, y = avg_silhouette_width)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Average Silhouette Width for Different Cluster Counts",
+       x = "Number of Clusters k",
+       y = "Average Silhouette Width")
+
 ```
 \captionof{figure}{Silhouette Method for Hierarchical Clustering}
 
@@ -1124,92 +1135,369 @@ The hierarchical clustering method performs well overall, with a particularly st
 
 # Exceptional Work
 ## Modeling and Evaluation
+\vspace{5pt}
 
 ```{r, echo=FALSE, eval = TRUE}
-
-# Transform population density and scale the data
-# Assume county_data_scaled is your original dataset with relevant columns
-county_data_scaled <- county_data_scaled %>%
-  mutate(
-    log_pop_density = log1p(pop_density)  # Apply log transformation to handle zeros
-  ) %>%
+# Log-transform population and remove NA values
+data_selected <- data %>%
+  mutate(log_total_pop = log1p(total_pop)) %>%
+  mutate(deaths_per_k = deaths / (total_pop / 1000)) %>%
   na.omit()  # Remove rows with NA values
-
-# Convert factor columns to numeric (if any) and keep only numeric columns
-county_data_scaled <- county_data_scaled %>%
-  mutate_if(is.factor, as.numeric) %>%   # Convert factor columns to numeric
-  select_if(is.numeric)                  # Keep only numeric columns
-
-# Convert to numeric matrix for compatibility with clustering algorithms
-county_data_matrix <- as.matrix(county_data_scaled)
-
-# Check if the matrix conversion was successful
-if (!is.numeric(county_data_matrix)) {
-  stop("Data conversion to numeric matrix failed. Ensure all columns are numeric.")
-}
-
-# 1. Gaussian Mixture Model (GMM) Clustering
-gmm_result <- Mclust(county_data_matrix, G = 3)  # Assume 3 clusters
-county_data_scaled$gmm_cluster <- as.factor(gmm_result$classification)
-
-# GMM Clustering Visualization
-ggplot(county_data_scaled, aes(x = log_pop_density, y = deaths_per_k, color = gmm_cluster)) +
-  geom_point(alpha = 0.7, size = 2) +
-  scale_color_manual(values = c("blue", "red", "green"), na.value = "black") +
-  labs(
-    title = "GMM Clustering on Log-Transformed Population Density & Mortality Rate",
-    x = "Log(Population Density + 1)",
-    y = "Deaths per 1k Population",
-    color = "Cluster"
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(size = 10),
-    plot.title = element_text(hjust = 0.5)
-  )
-
-# 2. HDBSCAN Clustering
-hdbscan_result <- hdbscan(county_data_matrix, minPts = 5)
-county_data_scaled$hdbscan_cluster <- as.factor(ifelse(hdbscan_result$cluster == 0, NA, hdbscan_result$cluster))
-
-# HDBSCAN Clustering Visualization with Custom Colors
-ggplot(county_data_scaled, aes(x = log_pop_density, y = deaths_per_k, color = hdbscan_cluster)) +
-  geom_point(alpha = 0.7, size = 2) +
-  scale_color_manual(values = c("red", "blue", "green", "purple", "orange", "brown", "black"), na.value = "grey") +
-  labs(
-    title = "HDBSCAN Clustering on Log-Transformed Population Density & Mortality Rate",
-    x = "Log(Population Density + 1)",
-    y = "Deaths per 1k Population",
-    color = "Cluster"
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(size = 10),
-    plot.title = element_text(hjust = 0.5)
-  )
 ```
 
-### Clustering _____
 
-#### Suitable Number of Clusters
+### Gaussian Mixture Models
+\vspace{5pt}
 
-#### Unsupervised Evaluation
+To deepen our analysis and provide a more sophisticated clustering approach, we utilized Gaussian Mixture Models (GMM) to identify patterns in the data that may not be captured by simpler methods like K-Means.
 
-#### Ground Truth Feature
+GMM is a probabilistic clustering method that assumes data points are generated from a mixture of finite Gaussian distributions with unknown parameters. Unlike K-Means, which assigns each data point to the nearest cluster centroid, GMM considers the probability of each data point belonging to each cluster, allowing for more nuanced and flexible cluster formation. This can be especially useful when clusters have different shapes, densities, or sizes.
 
-#### Supervised Evaluation
+#### GMM Clustering on Log-Transformed Population and Death Case Ratio.
+\leavevmode\vspace{5pt}
 
-### Clustering ______
+The key variables used in this clustering are
 
-#### Suitable Number of Clusters
+  - **Log-Transformed Population**: We use the natural logarithm of the population size (log_total_pop) as a feature. The log transformation helps in managing the wide range of population sizes across different counties, making the data more normally distributed and ensuring that extremely large or small populations do not disproportionately influence the analysis.
+  - **Death Case Ratio**: This feature represents the ratio of COVID-19 deaths to confirmed COVID-19 cases in each county. A lower death case ratio suggests better healthcare outcomes or management during the pandemic, which may correlate with county resilience and stability.
+ 
+```{r}
+# Apply GMM clustering
+gmm_result1 <- Mclust(data_selected %>% select(log_total_pop, death_case_ratio))
+data_selected$gmm_cluster1 <- as.factor(gmm_result1$classification)
 
-#### Unsupervised Evaluation
+# Count points per cluster for legend labels
+cluster_counts <- data_selected %>%
+  group_by(gmm_cluster1) %>%
+  summarize(count = n())
 
-#### Ground Truth Feature
+# Merge counts for updated legend labels
+data_selected <- data_selected %>%
+  left_join(cluster_counts, by = "gmm_cluster1")
 
-#### Supervised Evaluation
+# Representative counties for labeling
+representative_counties <- data_selected %>%
+  filter(county_name %in% c("Dallas County", "Harris County", "Travis County")) 
+
+# Plot GMM Clustering
+ggplot(data_selected, aes(x = log_total_pop, y = death_case_ratio, color = gmm_cluster1)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "loess", se = FALSE, aes(group = gmm_cluster1), linetype = "dashed") +
+  geom_text(
+    data = representative_counties,
+    aes(label = county_name),
+    vjust = -0.5,
+    hjust = 1.2,
+    size = 3
+  ) +
+  scale_color_manual(
+    values = c("red", "orange", "yellow"),
+    labels = paste("Cluster", cluster_counts$gmm_cluster1, " (n=", cluster_counts$count, ")", sep = "")
+  ) +
+  labs(
+    title = "GMM Clustering on Log(Population) and Death Case Ratio",
+    x = "Log(Total Population + 1)",
+    y = "Death Case Ratio",
+    color = "Cluster"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+```
+
+\vspace{5pt}
+
+```{r}
+format_silhouette_summary <- function(silhouette_summary) {
+  # Extract cluster sizes and average silhouette widths as vectors
+  cluster_ids <- as.numeric(names(silhouette_summary$clus.sizes))
+  cluster_sizes <- as.numeric(unname(silhouette_summary$clus.sizes))
+  avg_silhouette_widths <- as.numeric(unname(silhouette_summary$clus.avg.widths))
+  
+  # Create a clean data frame
+  df <- data.frame(
+    Cluster = cluster_ids,
+    Size = cluster_sizes,
+    `Avg Silhouette Width` = round(avg_silhouette_widths, 3)
+  )
+  
+  # Return the formatted data frame
+  return(df)
+}
+
+# Calculate and summarize Silhouette score for GMM Clustering 1
+gmm_dist1 <- dist(data_selected %>% select(log_total_pop, death_case_ratio))
+gmm_silhouette1 <- silhouette(as.integer(data_selected$gmm_cluster1), gmm_dist1)
+gmm_silhouette_summary1 <- summary(gmm_silhouette1)
+
+# Convert to data frame for display
+gmm_silhouette_df1 <- format_silhouette_summary(gmm_silhouette_summary1)
+
+# Display Silhouette Summary for GMM Clustering 1
+knitr::kable(
+  gmm_silhouette_df1, 
+  caption = "GMM Clustering Silhouette Scores on Log-Transformed Population and Death Case Ratio", 
+  format = "latex",
+  booktabs = TRUE,
+  position = "H"
+)
+
+```
+ 
+The clusterings appear well-defined. Clusters 1 and 3 have lower death case ratios than Cluster 2, on average. Cluster 2 represents counties within a relatively small range of intermediate population sizes that experienced moderate to high death ratios. These are notable for our analysis as these counties are unlikely to demonstrate the heath resilience desired by our stakeholder. 
+
+Based on the silhouette widths, we note that none of these clusters is particularly well-defined. Even the most well-defined cluster (2) exhibits a measly 0.177, indicating low cohesion in the cluster. These silhouette scores suggest suboptimal clustering, indicating that the selected features may not be able to provide the necessary information for distinguishing between counties without additional information. 
+ 
+#### Determining the optimal number of clusters
+
+\leavevmode\vspace{5pt}
+
+The Gaussian Mixture Modeling relies on the **mclust** package. This package tests a variety of cluster counts (from 1 to 9) and selects the optimal number of clusters. In this case, the GMM selected three clusters by maximizing the average silhouette width across clusters.
+
+\newpage
+
+#### Unsupervised Evaluation of GMM Clustering 
+
+\leavevmode\vspace{5pt}
+ 
+```{r}
+# Perform PCA
+pca_result <- prcomp(data_selected %>% select(log_total_pop, death_case_ratio), scale. = TRUE)
+
+# Create a data frame with PCA results and cluster assignments
+pca_df <- data.frame(PC1 = pca_result$x[,1], PC2 = pca_result$x[,2], Cluster = data_selected$gmm_cluster1)
+
+# Plot PCA results
+ggplot(pca_df, aes(PC1, PC2, color = Cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "PCA of GMM Clusters", x = "Principal Component 1", y = "Principal Component 2") +
+  theme_minimal()
+```
+
+Above, the results of the GMM clustering are applied to the two PCA components (linear combinations of the original variables that capture the most variance). We observe that the clusters are not compact, overlapping with each other substantially. The overlap indicates that many points have similar characteristics across clusters. Notably, Cluster 3 is distinct with substantially more points than either of the other clusters. Both clusters 1 and 2 are more sparse, with cluster 1 in particular offering fewer and less condensed counties, indicating this cluster may be the identifier for noisy counties that do not clearly fall within one of the other clusters. The low average silhouette width for Cluster 3 indicates that these points are relatively more compact in comparison to the other clusters.
+
+\leavevmode\vspace{5pt}
+
+```{r}
+cluster_profiles <- data_selected %>%
+  group_by(gmm_cluster1) %>%
+  summarise(
+    Count = n(),
+    `Avg Log Pop` = round(mean(log_total_pop), 2),
+    `Avg Death Case Ratio` = round(mean(death_case_ratio), 2),
+    `Median Log Pop` = round(median(log_total_pop), 2),
+    `Median Death Case Ratio` = round(median(death_case_ratio), 2)
+  )
+
+knitr::kable(
+  cluster_profiles, 
+  caption = "Cluster Profiles for GMM Clustering 1",
+  format = "latex",
+  booktabs = TRUE,
+  position = "H"
+)
+
+```
+
+The clustering provides insight into population size and health outcomes in Texas counties. The first cluster houses low population counties. These counties performed the best in terms of health outcomes with the lowest death to case ratio (0.01). These are likely rural counties with low population density and lower health risk factors. The second cluster has a higher population and the worst health outcomes of any cluster. This is interesting because an intuitive explanation suggests that more populous counties expedience worse health outcomes, and this clustering contradicts that intuition. The third and final cluster is the largest cluster. Counties in cluster three have a higher population on average than either of the other two clusters. Health outcomes in cluster three (death to case ratio of 0.02) are worse than those in cluster 1 but better than those in cluster 2. Cluster 3 likely encompasses urban counties where the risk factors are lower despite high population density.    
+
+### GMM Clustering on Median Income and Mortality Rate
+
+\leavevmode\vspace{5pt}
+
+The second GMM clustering, below, focuses on **Income** and **Mortality Rate** as defined by deaths per one thousand residents. Using these features, the **mclust** function determined that two clusters is appropriate to maximize the average silhouette width across clusters. 
+
+\leavevmode\vspace{5pt}
+
+```{r, eval=TRUE}
+# Apply GMM clustering for "GMM Clustering on Median Income and Mortality Rate"
+gmm_result2 <- Mclust(data_selected %>% select(deaths_per_k, median_income, income_per_capita))
+data_selected$gmm_cluster2 <- as.factor(gmm_result2$classification)
+
+# Count points per cluster
+cluster_counts <- data_selected %>%
+  group_by(gmm_cluster2) %>%
+  summarize(count = n())
+
+# Update legend labels with cluster counts
+data_selected <- data_selected %>%
+  left_join(cluster_counts, by = "gmm_cluster2")
+
+# Plot the clustering
+ggplot(data_selected, aes(x = median_income, y = deaths_per_k, color = gmm_cluster2)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, aes(group = gmm_cluster2), linetype = "dashed") +
+  scale_color_manual(
+    values = c("red", "green"),
+    labels = paste("Cluster", cluster_counts$gmm_cluster2, " (n=", cluster_counts$count, ")", sep = "")
+  ) +
+  labs(
+    title = "GMM Clustering on Income and Mortality Rate",
+    x = "Median Income",
+    y = "Deaths per 1,000 Population",
+    color = "Cluster"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+```
+
+```{r}
+# Calculate and summarize Silhouette score for GMM Clustering 2
+gmm_dist2 <- dist(data_selected %>% select(deaths_per_k, median_income, income_per_capita))
+gmm_silhouette2 <- silhouette(as.integer(data_selected$gmm_cluster2), gmm_dist2)
+gmm_silhouette_summary2 <- summary(gmm_silhouette2)
+
+# Convert to data frame for display
+gmm_silhouette_df2 <- format_silhouette_summary(gmm_silhouette_summary2)
+
+# Display Silhouette Summary for GMM Clustering 2
+knitr::kable(
+  gmm_silhouette_df2, 
+  caption = "GMM Clustering Silhouette Scores on Income and Mortality Rate", 
+  format = "latex",
+  booktabs = TRUE,
+  position = "H"
+)
+
+
+```
+
+Based on the GMM clustering of the deaths per thousand residents and median income, we observe two clusters with fairly low cohesion levels. The first cluster contains roughly twice as many counties as the second. Counties in cluster 1 represent lower to mid-income counties with higher mortality rates. The relatively high silhouette score of (0.44) indicates that this cluster is quite distinct, with counties that share similar qualities in terms of income and COVID mortality. The second cluster represents higher income counties with lower mortality rates. This cluster is more ill-defined than the first (indicated by its lower silhouette width of 0.02). The low silhouette width indicates that these counties are not as homogeneous and may overlap with the counties in cluster 1 in terms of both their income and mortality rate. 
+
+### Supervised Evaluation
+
+```{r, eval=TRUE}
+
+# Perform PCA on relevant variables
+pca_result2 <- prcomp(data_selected %>% select(deaths_per_k, median_income, income_per_capita), scale. = TRUE)
+
+# Create a data frame with PCA results and cluster assignments
+pca_df2 <- data.frame(PC1 = pca_result2$x[,1], PC2 = pca_result2$x[,2], Cluster = data_selected$gmm_cluster2)
+
+# Plot PCA results
+ggplot(pca_df2, aes(PC1, PC2, color = Cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "PCA of GMM Clusters on Median Income and Mortality Rate", x = "Principal Component 1", y = "Principal Component 2") +
+  theme_minimal()
+
+library(scales)  # For comma formatting
+
+# Create a table with shorter, simpler column names and formatted numbers
+cluster_profiles2 <- data_selected %>%
+  group_by(gmm_cluster2) %>%
+  summarise(
+    Count = n(),
+    `Avg Deaths` = round(mean(deaths_per_k), 2),
+    `Avg Income` = comma(round(mean(median_income), 2)),
+    `Avg Capita Inc` = comma(round(mean(income_per_capita), 2)),
+    `Med Deaths` = round(median(deaths_per_k), 2),
+    `Med Income` = comma(round(median(median_income), 2)),
+    `Med Capita Inc` = comma(round(median(income_per_capita), 2))
+  )
+
+# Display the table with simplified headers
+knitr::kable(
+  cluster_profiles2, 
+  caption = "Cluster Profiles for GMM Clustering on Median Income and Mortality Rate",
+  format = "latex",
+  booktabs = TRUE,
+  position = "H"
+)
+
+```
+
+The supervised evaluation plots the points using PCA to reduce the dimensionality of the data while preserving variance. The clusters from the second GMM clustering are plotted against the PCA in order to visualize the results of the clustering. Cluster 1 represents counties with a relatively higher mortality rate of 2.23 deaths per thousand, double that of cluster 2. Additionally, incomes are lower for counties in cluster 1 on average. Based on these results, we determine that cluster 2 represents affluent counties with better health outcomes and cluster 1 represents poorer counties that fared worse during the pandemic.
+
+\newpage 
+
+#### Ground Truth Assessment
+\leavevmode\vspace{5pt}
+
+To evaluate the success of the GMM clustering, we divided the counties into **Urban and Rural counties** based on population and income. Counties where the log of population is greater than 10 **or** the average income is above $50,000 are considered urban. While these thresholds are admittedly arbitrary, the classification of Urban versus Rural allows us to compare the ground truth with the earlier clusterings and assess their perforamance. Below is a scatterplot of the arbitrary divide between urban and rural counties that we will use as the ground truth going forward.
+
+```{r}
+# Define arbitrary thresholds
+log_pop_threshold <- 10  # Adjust based on data distribution
+income_threshold <- 50000  # Example income threshold, adjust based on distribution
+
+# Classify areas as Urban or Rural based on thresholds
+data_selected <- data_selected %>%
+  mutate(Urban_Rural = case_when(
+    log_total_pop >= log_pop_threshold | median_income >= income_threshold ~ "Urban",
+    TRUE ~ "Rural"
+  ))
+
+# Now set Urban_Rural as a factor with specified levels
+data_selected <- data_selected %>%
+  mutate(Urban_Rural = factor(Urban_Rural, levels = c("Urban", "Rural")))
+
+# Calculate counts for Urban and Rural
+urban_rural_counts <- table(data_selected$Urban_Rural)
+urban_count <- urban_rural_counts["Urban"]
+rural_count <- urban_rural_counts["Rural"]
+
+# Create a customized legend with counts
+ggplot(data_selected, aes(x = log_total_pop, y = median_income, color = Urban_Rural)) +
+  geom_point(alpha = 0.6) +
+  labs(
+    title = "Urban vs Rural Classification Based on Population and Income",
+    x = "Log-Transformed Population",
+    y = "Median Income",
+    color = "Classification"
+  ) +
+  scale_color_manual(
+    values = c("Urban" = "blue", "Rural" = "green"),
+    labels = c(paste("Urban (n=", urban_count, ")", sep = ""),
+               paste("Rural (n=", rural_count, ")", sep = ""))
+  ) +
+  theme_minimal()
+
+```
+
+Comparing each of our clusterings to the ground truth of Urban versus Rural, we obtained the following purity scores. **Purity** measures the extent to which the clusters produced by each model align with the ground truth. 
+
+```{r}
+
+# Function to calculate purity
+calculate_purity <- function(cluster_labels, ground_truth_labels) {
+  table <- table(cluster_labels, ground_truth_labels)
+  purity <- sum(apply(table, 1, max)) / length(cluster_labels)
+  return(purity)
+}
+
+# Calculate purity for GMM Clustering 1 (on Log-Transformed Population and Death Case Ratio)
+purity_gmm1 <- calculate_purity(data_selected$gmm_cluster1, data_selected$Urban_Rural)
+
+# Calculate purity for GMM Clustering 2 (on Median Income and Mortality Rate)
+purity_gmm2 <- calculate_purity(data_selected$gmm_cluster2, data_selected$Urban_Rural)
+
+# Display purity results
+purity_results <- data.frame(
+  Clustering = c("GMM Clustering 1", "GMM Clustering 2"),
+  Purity = c(purity_gmm1, purity_gmm2)
+)
+
+knitr::kable(
+  purity_results, 
+  caption = "Purity Scores for GMM Clusterings Based on Urban/Rural Classification",
+  format = "latex",
+  booktabs = TRUE,
+  position = "H"
+)
+
+
+```
+
+Neither purity score reaches a level of 0.7, indicating that these clusterings do not definitively align with the Urban/Rural ground truth. GMM clustering 1 performs slightly better than GMM clustering 2, suggesting that **Population** and **Death Case Ratio** are slightly more informative for distinguishing urban from rural counties. This analysis suggests that urban and rural counties have more nuanced features that distinguish them, not fully captured by the variables used in the models above. 
 
 \newpage
 
@@ -1219,22 +1507,114 @@ After analyzing our model's results, if a client has an interest in opening a bu
 
 After taking cluster "2" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
 
-```{r, echo=FALSE, eval = FALSE}
-top_3_kmeans <- summary_data_kmeans %>% filter(matias_kmeans == 2) %>% rename(layer_2_kmeans = "matias_kmeans") %>% arrange(desc(pop_density)) %>% select(county_name)
+```{r, echo=FALSE, eval = TRUE}
 
-# Display the summary statistics table with narrower columns and smaller font size
-kable(top_3_kmeans, format = "latex", caption = "Second Layer K-means Clustering Top 3 Counties", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE)
-```
+# Create a data frame summarizing each clustering method
+clustering_summary <- data.frame(
+  Method = c(
+    "K-Means (Unsupervised)",
+    "K-Means (Supervised)",
+    "Hierarchical (Unsupervised)",
+    "Hierarchical (Supervised)",
+    "GMM Clustering 1",
+    "GMM Clustering 2"
+  ),
+  Number_of_Clusters = c(
+    2,  # K-Means Unsupervised
+    2,  # K-Means Supervised
+    2,  # Hierarchical Unsupervised
+    2,  # Hierarchical Supervised
+    3,  # GMM Clustering 1 (Log-Transformed Population and Death Case Ratio)
+    2   # GMM Clustering 2 (Median Income and Mortality Rate)
+  ),
+  Good_Cluster = c(
+    2,  # K-Means Unsupervised
+    2,  # K-Means Supervised
+    2,  # Hierarchical Unsupervised
+    2,  # Hierarchical Supervised
+    1,  # GMM Clustering 1
+    2   # GMM Clustering 2
+  )
+)
 
-The three results in cluster "2" for the second layer hierarchical clustering were:
+# Display the summary table
+kable(clustering_summary, caption = "Summary of Clustering Methods and Optimal Clusters", format = "latex", booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, font_size = 10) %>%
+  column_spec(1, width = "5cm") %>%  # Set method column width
+  column_spec(2, width = "3cm") %>%  # Set number_of_clusters column width
+  column_spec(3, width = "3cm")      # Set good_cluster column width
 
-```{r, echo=FALSE, eval = FALSE}
-top3_hierarchical <- summary_data_hierarchical %>% filter(matias_hierarchical == 2) %>% rename(layer_2_hierarchical = "matias_hierarchical") %>% arrange(desc(pop_density)) %>% select(county_name)
 
-# Display the summary statistics table with narrower columns and smaller font size
-kable(top3_hierarchical, format = "latex", caption = "Second Layer K-means Clustering Top 3 Counties", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE)
+# For K-Means Unsupervised: Good cluster is 2
+data_clustered_1 <- data_clustered_1 %>%
+  rename(kmeans_unsup_cluster = cluster) %>%
+  mutate(kmeans_unsup_good = ifelse(kmeans_unsup_cluster == 2, TRUE, FALSE))
+
+# For K-Means Supervised: Good cluster is 2
+data_clustered_2 <- data_clustered_2 %>%
+  rename(kmeans_sup_cluster = cluster) %>%
+  mutate(kmeans_sup_good = ifelse(kmeans_sup_cluster == 2, TRUE, FALSE))
+
+# For Hierarchical Clustering Unsupervised: Good cluster is 2
+# (Assuming `hc_complete` is the hierarchical model object for the unsupervised method)
+data_clustered_hc_unsup <- data %>%
+  mutate(cluster_hc_unsup = cutree(hc_complete, k = 2)) %>%
+  mutate(hier_unsup_good = ifelse(cluster_hc_unsup == 2, TRUE, FALSE)) %>%
+  select(county_name, hier_unsup_good, cluster_hc_unsup)
+
+# For Hierarchical Clustering Supervised: Good cluster is 2
+# (Assuming `hc_ward` is the hierarchical model object for the supervised method)
+data_clustered_hc_sup <- data %>%
+  mutate(cluster_hc_sup = cutree(hc_ward, k = 2)) %>%
+  mutate(hier_sup_good = ifelse(cluster_hc_sup == 2, TRUE, FALSE)) %>%
+  select(county_name, hier_sup_good, cluster_hc_sup)
+
+# For Gaussian Mixture Models (GMM) Clustering 1: Good cluster is 1 (lowest death ratio)
+data_selected <- data_selected %>%
+  mutate(gmm_cluster_good_1 = ifelse(gmm_cluster1 == 1, TRUE, FALSE))
+
+# For Gaussian Mixture Models (GMM) Clustering 2: Good cluster is 2 (higher income, lower mortality)
+data_selected <- data_selected %>%
+  mutate(gmm_cluster_good_2 = ifelse(gmm_cluster2 == 2, TRUE, FALSE))
+
+# Step 2: Merge "good" indicators across different clustering methods
+final_clusters <- data_clustered_hc_unsup %>%
+  left_join(data_clustered_hc_sup, by = "county_name") %>%
+  left_join(data_clustered_1 %>% select(county_name, kmeans_unsup_good), by = "county_name") %>%
+  left_join(data_clustered_2 %>% select(county_name, kmeans_sup_good), by = "county_name") %>%
+  left_join(data_selected %>% select(county_name, gmm_cluster_good_1, gmm_cluster_good_2), by = "county_name")
+
+# Step 3: Count how many methods mark each county as "good"
+final_clusters <- final_clusters %>%
+  rowwise() %>%
+  mutate(
+    good_count = sum(
+      c_across(ends_with("_good")), 
+      na.rm = TRUE
+    )
+  ) %>%
+  ungroup()
+
+# Step 4: Filter counties that are "good" in at least half of the methods (≥3 methods)
+final_recommended_counties <- final_clusters %>%
+  mutate(
+    total_methods = rowSums(!is.na(select(., ends_with("_good"))))
+  ) %>%
+  filter(good_count >= 3)
+
+# Step 5: Create a concise table for final recommendations
+concise_recommendations <- final_recommended_counties %>%
+  select(county_name, good_count, total_methods) %>%
+  arrange(desc(good_count))  # Sort by descending order of good_count
+
+# Step 6: Display the narrower, formatted table
+kable(concise_recommendations, caption = "Recommended Counties Based on Clustering Analysis", format = "latex", booktabs = TRUE) %>%
+  kable_styling(full_width = FALSE, font_size = 10) %>%
+  column_spec(1, width = "6cm", bold = TRUE) %>%         # Bold county names and set column width
+  column_spec(2, width = "2cm") %>%                      # Set column width for good_count
+  column_spec(3, width = "2cm") %>%                      # Set column width for total_methods
+  add_header_above(c(" " = 1, "Clustering Indicators" = 2))  # Add a header row for clarity
+
 ```
 
 *Discuss how the model can be interpreted and the recommendations based on the findings. Explain the utility for the stakeholders.*
