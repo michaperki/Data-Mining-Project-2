@@ -1613,16 +1613,14 @@ final_recommended_counties <- final_clusters %>%
 
 # Step 5: Create a concise table for final recommendations
 concise_recommendations <- final_recommended_counties %>%
-  select(county_name, good_count, total_methods) %>%
+  select(county_name, good_count) %>%
   arrange(desc(good_count))  # Sort by descending order of good_count
 
 # Step 6: Display the narrower, formatted table
 kable(concise_recommendations, caption = "Recommended Counties Based on Clustering Analysis", format = "latex", booktabs = TRUE, position = "H") %>%
   kable_styling(full_width = FALSE, font_size = 10) %>%
   column_spec(1, width = "6cm", bold = TRUE) %>%         # Bold county names and set column width
-  column_spec(2, width = "2cm") %>%                      # Set column width for good_count
-  column_spec(3, width = "2cm") %>%                      # Set column width for total_methods
-  add_header_above(c(" " = 1, "Clustering Indicators" = 2))  # Add a header row for clarity
+  column_spec(2, width = "2cm")                   # Set column width for good_count
 
 ```
 
