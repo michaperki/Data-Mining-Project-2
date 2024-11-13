@@ -1503,9 +1503,9 @@ Neither purity score reaches a level of 0.7, indicating that these clusterings d
 
 # Recommendations
 
-After analyzing our model's results, if a client has an interest in opening a business in an affluent, high land population density, and high COVID-19 performing county in Texas, they should consider the following counties.
+\leavevmode\vspace{5pt}
 
-After taking cluster "2" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
+Here is a summary of the clusterings performed with the identified "good cluster" subgroup listed. 
 
 ```{r, echo=FALSE, eval = TRUE}
 
@@ -1538,12 +1538,20 @@ clustering_summary <- data.frame(
 )
 
 # Display the summary table
-kable(clustering_summary, caption = "Summary of Clustering Methods and Optimal Clusters", format = "latex", booktabs = TRUE) %>%
+kable(clustering_summary, caption = "Summary of Clustering Methods and Optimal Clusters", format = "latex", booktabs = TRUE, position = "H") %>%
   kable_styling(full_width = FALSE, font_size = 10) %>%
   column_spec(1, width = "5cm") %>%  # Set method column width
   column_spec(2, width = "3cm") %>%  # Set number_of_clusters column width
   column_spec(3, width = "3cm")      # Set good_cluster column width
 
+```
+
+
+After analyzing our model's results, if a client has an interest in opening a business in an affluent, high land population density, and high COVID-19 performing county in Texas, they should consider the following counties.
+
+After taking cluster "2" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
+
+```{r}
 
 # For K-Means Unsupervised: Good cluster is 2
 data_clustered_1 <- data_clustered_1 %>%
@@ -1608,7 +1616,7 @@ concise_recommendations <- final_recommended_counties %>%
   arrange(desc(good_count))  # Sort by descending order of good_count
 
 # Step 6: Display the narrower, formatted table
-kable(concise_recommendations, caption = "Recommended Counties Based on Clustering Analysis", format = "latex", booktabs = TRUE) %>%
+kable(concise_recommendations, caption = "Recommended Counties Based on Clustering Analysis", format = "latex", booktabs = TRUE, position = "H") %>%
   kable_styling(full_width = FALSE, font_size = 10) %>%
   column_spec(1, width = "6cm", bold = TRUE) %>%         # Bold county names and set column width
   column_spec(2, width = "2cm") %>%                      # Set column width for good_count
