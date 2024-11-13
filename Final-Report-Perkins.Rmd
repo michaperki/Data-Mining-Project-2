@@ -1,0 +1,1043 @@
+---
+title: "Final Report"
+author: "Olivia Hofmann and Michael Perkins"
+date: "2024-11-13"
+output:
+  pdf_document:
+    fig_caption: true
+    toc: true
+    toc_depth: 4
+  html_document:
+    toc: true
+    toc_depth: '4'
+    df_print: paged
+header-includes: \usepackage{caption}
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  message = FALSE, 
+  warning = FALSE, 
+  error = FALSE,
+  cache = TRUE
+)
+
+# Install only missing packages, load required libraries
+pkgs <- c("dplyr", "tidyr", "knitr", "kableExtra", "ggplot2", "cluster", "factoextra", "stringr", "purrr", "gridExtra", "dendextend", "tidycensus", "httr", "jsonlite", "tibble", "dbscan", "mclust", "scales", "clusterCrit")
+
+new_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+if(length(new_pkgs)) install.packages(new_pkgs)
+invisible(lapply(pkgs, library, character.only = TRUE))
+
+# Define TAB as a repeated non-breaking space
+TAB <- "&nbsp;&nbsp;&nbsp;&nbsp;"
+
+# Function to format large numbers with commas
+format_large_numbers <- function(x) {
+  format(round(x, 2), big.mark = ",", scientific = FALSE)
+}
+
+```
+
+\newpage
+
+# Problem Statement
+
+`r TAB`The stakeholder, a **property developer**, seeks to identify the best location in Texas for developing a mixed-use building that includes amenities like a gym, restaurants, and a pharmacy. The key concern is selecting a county that demonstrates stability and resilience in response to unpredictable events like the COVID-19 pandemic. This analysis aims to answer the following questions:
+
+**Key questions to address include:**
+  
+`r TAB`- What counties in Texas demonstrated resilience during the COVID-19 pandemic?
+  
+`r TAB`- What are the characteristics of these counties in terms of population makeup and economic stability?
+  
+`r TAB`- Can we group counties to identify patterns that indicate stability and resilience?
+
+&nbsp;&nbsp;&nbsp;By understanding how different counties fared during the pandemic, the developer can make an informed decision to ensure the chosen location offers long-term stability and resilience against unforeseen circumstances.
+
+\newpage
+
+# Income Data in Texas Counties
+## Data Collection, Quality, and Exploration
+
+```{r load data, echo = FALSE}
+# Load and filter Texas data
+data <- read.csv("data/COVID-19_cases_plus_census.csv") %>%
+  filter(state == "TX") %>%
+  select(county_name, confirmed_cases, deaths, total_pop, median_income, income_per_capita,
+         rent_over_50_percent, rent_30_to_35_percent, income_less_10000, 
+         income_50000_59999, income_100000_124999)
+
+# Add a column for the deaths/confirmed cases ratio
+data <- data %>%
+  mutate(death_case_ratio = deaths / confirmed_cases)
+```
+
+### Objects to Cluster
+`r TAB`The objects to be clustered are the counties in Texas. We aim to identify counties that exhibited economic resilience during the COVID-19 pandemic by analyzing income and rent burden metrics alongside general population data.
+
+### Feature Selection
+
+\hspace{10pt}We selected features that focus on **income, wealth, rent burden, and population**—key factors for assessing economic resilience. These features reflect the economic foundation and stability of each county, critical for understanding responses to crises like COVID-19. 
+
+The features used, their scales, and measurement types are as follows:
+
+`r TAB`- **Income Levels**: The distribution of households across various income levels provides insight into a county's overall economic health and resilience.
+  
+`r TAB`- **Rent Burden**: High rent burden percentages indicate financial strain on households, affecting their ability to manage crises effectively.
+  
+`r TAB`- **Median Income** and **Income per Capita**: These metrics serve as indicators of wealth within a county. Wealthier counties typically have more resources to navigate economic shocks and support their communities during difficult times.
+  
+`r TAB`- **Population**: Including population statistics allows for a more accurate interpretation of COVID-19 impacts by normalizing the number of cases and deaths relative to county size.
+
+`r TAB`Each feature is scaled to ensure equal contribution to the clustering process. We use **standardized Euclidean distance** to calculate similarity, ensuring that larger-scale features (e.g., population) do not disproportionately affect cluster formation.
+
+`r TAB`By clustering counties based on these features, we can identify income and wealth profiles that may correlate with resilience during the pandemic. This analysis will help us understand which counties were better equipped to handle economic and social disruptions caused by COVID-19, ultimately aiding the stakeholder in making an informed investment decision.
+
+\newpage
+### Basic Statistics of Features
+
+```{r basic statistics, echo = FALSE}
+# Helper function to calculate and format basic statistics for a given column
+calculate_stats <- function(column) {
+  mean_val <- round(mean(column, na.rm = TRUE), 2)
+  sd_val <- round(sd(column, na.rm = TRUE), 2)
+  min_val <- min(column, na.rm = TRUE)
+  max_val <- max(column, na.rm = TRUE)
+  
+  # Return a named list for easy access and formatting
+  list(
+    Mean = format(mean_val, big.mark = ","),
+    SD = format(sd_val, big.mark = ","),
+    Min = format(min_val, big.mark = ","),
+    Max = format(max_val, big.mark = ",")
+  )
+}
+
+# Named list of columns and their labels for the "Feature" column
+features <- list(
+  "Median Income (USD)" = data$median_income,
+  "Income per Capita (USD)" = data$income_per_capita,
+  "Rent > 50% Income" = data$rent_over_50_percent,
+  "Rent 30-35% Income" = data$rent_30_to_35_percent,
+  "Income < 10,000 USD" = data$income_less_10000,
+  "Income 50,000-59,999 USD" = data$income_50000_59999,
+  "Income 100,000-124,999 USD" = data$income_100000_124999,
+  "Total Population" = data$total_pop
+)
+
+# Apply `calculate_stats` across all features and bind into a data frame
+feature_stats <- do.call(rbind, lapply(features, calculate_stats)) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Feature")  # Convert row names to a "Feature" column
+
+# Display the formatted table with a descriptive caption
+kable(feature_stats, format = "markdown", caption = "Basic Statistics of Key Features for Clustering Texas Counties") %>%
+  kable_styling(full_width = FALSE, font_size = 10)
+
+```
+
+`r TAB`The table provides an overview of the key features used for clustering Texas counties. Each feature's **mean**, **standard deviation (SD)**, **minimum (Min)**, and **maximum (Max)** values are shown to highlight the range and distribution within the dataset. These statistics offer insight into the variations across counties, helping us understand the economic conditions and resilience factors that may correlate with each county's response to the COVID-19 pandemic. 
+
+`r TAB`For instance, features like **median income** and **income per capita** provide a sense of wealth distribution and overall economic stability within each county. Higher values may indicate counties with stronger financial resources, which could contribute to greater resilience. Meanwhile, metrics like **rent burden** (e.g., rent constituting over 50% or 30-35% of household income) reflect financial strain on residents, which might impact a county’s ability to handle crises effectively. Lastly, **total population** helps normalize COVID-19 case and death rates, allowing for more accurate comparisons across counties of different sizes.
+
+`r TAB`Analyzing these basic statistics will aid in identifying clusters of counties that share similar economic characteristics, offering the stakeholder valuable insights into which regions may be more suitable for long-term investments.
+
+### Scale of Measurement and Similarity Measures
+
+`r TAB`All of the selected features are measured on a **ratio scale**, as they have a true zero point (e.g., zero income, zero population) and allow for meaningful arithmetic operations, such as calculating differences and ratios. The table below defines the scale and provides a brief description of each feature.
+
+```{r scale of measurement, echo = FALSE}
+# Define feature details as vectors
+features <- c("Median Income", "Income per Capita", "Rent > 50% Income", 
+              "Rent 30-35% Income", "Income <10,000 USD", "Income 50,000-59,999 USD",
+              "Income 100,000-124,999 USD", "Total Population")
+scales <- rep("Ratio", length(features))
+descriptions <- c("Income in USD", "Per capita income in USD", 
+                  "Households paying >50% income in rent", "Households paying 30-35% income in rent",
+                  "Households earning <10,000 USD", "Households earning 50,000-59,999 USD",
+                  "Households earning 100,000-124,999 USD", "Total county population")
+
+# Combine vectors into a data frame
+measurement_scales <- data.frame(
+  Feature = features,
+  Scale = scales,
+  Description = descriptions
+)
+
+# Display the table
+kable(measurement_scales, format = "markdown", caption = "Measurement Scales for Features") %>%
+  kable_styling(full_width = FALSE, font_size = 10)
+
+```
+
+### Measures for Similarity/Distance
+
+`r TAB`For clustering analysis, it is crucial to select appropriate measures of similarity or distance based on the nature of the data. The following measures are particularly relevant:
+
+- **Euclidean Distance**: The most commonly used distance measure, calculated as the straight-line distance between points in a multi-dimensional space. This measure is especially effective for continuous numerical data, such as income or population figures, where relationships between data points can be interpreted geometrically. Euclidean distance provides an intuitive and straightforward approach for visualizing proximity between clusters.
+  
+- **Manhattan Distance**: This measure calculates the distance between two points by summing the absolute differences of their coordinates. Manhattan distance is beneficial when dealing with outliers or when the scale of measurement varies among features. It reflects a grid-like path, which can be advantageous when a more robust metric against extreme values is required, as it reduces the impact of outliers.
+  
+- **Standardization/Normalization**: When features exhibit wide ranges, standardizing or normalizing the data is essential before applying distance measures. This ensures that each feature contributes equally to the distance calculation, preventing features with larger scales from disproportionately influencing clustering results.
+
+`r TAB`For this analysis, a combination of **standardized Euclidean distance** will be utilized. The data will be standardized to ensure each feature contributes equally to the distance calculation, and then Euclidean distance will be applied. This approach is appropriate given the continuous and numerical nature of income and population data, providing a clear and meaningful way to measure similarity between counties based on economic and demographic factors.
+
+
+### Normalization/Standardization
+
+`r TAB`Standardization was applied to ensure all features were on a comparable scale, which is crucial for clustering algorithms. Without standardization, features with larger ranges or counts could disproportionately influence the analysis. By transforming each numerical feature to have a mean of 0 and a standard deviation of 1, we enable meaningful comparisons across variables. This standardization was conducted in R. The **county name** feature, being categorical, was excluded from this process as it does not require scaling.
+
+\newpage
+## Modeling and Evaluation
+### K-Means Clustering
+
+`r TAB`The K-means clustering analysis divides Texas counties into two distinct clusters, represented by different colors and shapes on the plot. Each point represents a county, and the visual boundary around each cluster highlights the separation between groups. This clustering helps uncover patterns in economic resilience among Texas counties during the COVID-19 pandemic.
+
+`r TAB`The plot below illustrates the clusters formed by K-means, showing how counties are grouped based on economic and demographic features. The analysis enables a clearer understanding of how certain counties exhibit similar characteristics in terms of income, rent burden, and pandemic impacts.
+
+\vspace{10pt}
+
+```{r k-means clustering, echo=FALSE}
+# Scale only the relevant numerical features
+numerical_features <- data %>%
+  select(median_income, income_per_capita, rent_over_50_percent, rent_30_to_35_percent,
+         income_less_10000, income_50000_59999, income_100000_124999, total_pop)
+
+scaled_data_kmean <- scale(numerical_features)
+
+# Perform K-means clustering with 2 clusters and set reproducibility
+set.seed(123)
+kmeans_result <- kmeans(scaled_data_kmean, centers = 2, nstart = 20)
+
+# Append cluster assignments to the original data
+data_clustered_1 <- data %>%
+  mutate(cluster = as.factor(kmeans_result$cluster))
+
+# Visualization of Clustering
+fviz_cluster(kmeans_result, data = scaled_data_kmean,
+             geom = "point", ellipse.type = "convex",
+             ggtheme = theme_minimal(), labelsize = 10) +
+  labs(title = "K-Means Clustering of Texas Counties",
+       x = "Dimension 1", y = "Dimension 2")
+
+```
+
+\captionof{figure}{K-Means Clustering of Texas Counties}
+
+\vspace{10pt}
+
+  - **Cluster 1 (Red):** This cluster contains 250 points with an average silhouette width of 0.87, indicating strong cohesion and separation from other clusters. This suggests that Cluster 1 is compact and well-defined within the dataset, providing reliable clustering results for the majority of data points.
+  - **Cluster 2 (Blue):** This cluster has only 4 points with an average silhouette width of 0.45, indicating lower cohesion and weaker separation from other clusters. This suggests that Cluster 2 may be an outlier group or not well-defined, reflecting weaker clustering performance for these few points.
+
+`r TAB`Overall, while Cluster 1 appears robust, the small size and low silhouette width of Cluster 2 indicate that the clustering may not be entirely effective in capturing distinct patterns across the dataset.
+
+
+\vspace{10pt}
+
+`r TAB`A summary statistics table provides a breakdown of the average values for key features across the two clusters identified through K-means clustering. Each cluster represents a group of Texas counties with similar economic, demographic, and pandemic characteristics. 
+
+`r TAB`The table includes average values for **median income**, **income per capita**, **rent burden levels** (both for households spending more than 50% and 30-35% of their income on rent), **confirmed COVID-19 cases**, **deaths**, and **total population** for each cluster. This breakdown offers insights into the socioeconomic and demographic differences between the clusters, highlighting patterns that may impact economic resilience and stability within each group of counties.
+
+
+```{r k-means summary statistics by cluster, echo=FALSE}
+# Calculate average values for each feature by cluster with adjusted column names
+cluster_summary <- data_clustered_1 %>%
+  group_by(cluster) %>%
+  summarise(
+    "Avg\nMedian\nIncome" = round(mean(median_income, na.rm = TRUE), 2),
+    "Avg\nIncome\nper Capita" = round(mean(income_per_capita, na.rm = TRUE), 2),
+    "Avg\nRent\n> 50%" = round(mean(rent_over_50_percent, na.rm = TRUE), 2),
+    "Avg\nRent\n30-35%" = round(mean(rent_30_to_35_percent, na.rm = TRUE), 2),
+    "Avg\nConfirmed\nCases" = round(mean(confirmed_cases, na.rm = TRUE), 2),
+    "Avg\nDeaths" = round(mean(deaths, na.rm = TRUE), 2),
+    "Total\nPopulation" = round(mean(total_pop, na.rm = TRUE), 2)
+  )
+
+# Display the summary statistics table with adjusted column widths and right alignment
+kable(cluster_summary %>%
+      mutate(across(where(is.numeric), format_large_numbers)), 
+      format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE, align = "r") %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(1, width = "2cm") %>%          # Cluster column width
+  column_spec(2:ncol(cluster_summary), width = "1.5cm")   # Data columns width
+```
+
+`r TAB`The K-means clustering results suggest two groups of counties, but the distribution is highly uneven. Cluster 1 contains the vast majority of counties (approximately 95%), while Cluster 2 represents only a small subset. This imbalance raises questions about whether the clustering approach effectively captured meaningful differences across Texas counties. The observed patterns show some differences between clusters, but they may be a result of population size rather than distinct economic or pandemic-related characteristics.
+
+\vspace{5pt}
+
+  - **Average Median Income**: Cluster 1 has an average median income of approximately 49,706 USD, while Cluster 2 has a slightly higher average of about 59,260 USD. Although Cluster 2’s median income is somewhat higher, this difference may simply reflect the presence of a few more affluent, populous counties rather than a distinct socioeconomic profile.
+
+  - **Average Income per Capita**: The difference in income per capita is also modest, with Cluster 1 averaging around 24,730 USD and Cluster 2 around 31,300 USD. This suggests that while Cluster 2 may include counties with slightly higher economic indicators, these distinctions are not stark and do not strongly differentiate the clusters.
+
+  - **Rent Burden**: Cluster 2 has a slightly higher rent burden, with more households spending a significant portion of their income on rent (e.g., 13.67% for households spending over 50% of their income on rent compared to 8.31% in Cluster 1). However, this difference may be incidental rather than indicative of a clear socioeconomic separation.
+
+  - **COVID-19 Impact**: The most noticeable difference between clusters is in COVID-19-related metrics. Cluster 2 shows an average of 2,148 deaths, while Cluster 1 has an average of around 87 deaths. This disparity could reflect the concentration of higher population counties in Cluster 2, where higher transmission and mortality rates are expected. However, this metric alone may not provide enough justification for the clustering outcome, as it is heavily influenced by population density rather than underlying resilience or economic factors.
+
+  - **Total Population**: Cluster 2 includes counties with significantly larger populations (average 2,426,000) compared to Cluster 1 (61,404). This suggests that the clustering may be driven primarily by population size rather than meaningful economic or pandemic resilience indicators.
+
+\vspace{5pt}
+
+`r TAB`Overall, the clustering results highlight some differences in population and COVID-19 metrics but fall short of revealing a clear or actionable division based on economic resilience or pandemic impact. With 95% of counties grouped into a single cluster, this K-means clustering may not provide sufficient insight for distinguishing between counties in a way that aligns with the analysis objectives. Further refinement of the clustering approach—perhaps by adjusting the number of clusters, selecting different features, or exploring alternative clustering algorithms—might be necessary to achieve more meaningful separation among Texas counties.
+
+\newpage
+
+#### Suitable Number of Clusters
+\hspace{10pt}`r TAB`The **Elbow Method** evaluates the optimal number of clusters by plotting the **Within-Cluster Sum of Squares (WSS)** across various cluster counts. WSS reflects the compactness of clusters, with lower values indicating tighter clusters. The "elbow" point, where additional clusters yield diminishing returns in WSS reduction, is considered optimal. In the elbow plot below, the "elbow" is not distinctly sharp, but the WSS curve flattens around 2 clusters. This suggests that 2 clusters may adequately capture the primary variation in the data, though the lack of a distinct elbow point implies limited clustering structure.
+
+
+\vspace{10pt}
+
+```{r k-means optimal cluster, echo=FALSE}
+# Calculate total within-cluster sum of squares (WSS) for different values of k
+wss <- sapply(1:10, function(k) {
+  kmeans(scaled_data_kmean, centers = k, nstart = 20)$tot.withinss
+})
+
+# Prepare data for plotting
+elbow_data <- data.frame(
+  k = 1:10,
+  wss
+)
+
+# Plot the elbow method using ggplot2
+ggplot(elbow_data, aes(x = k, y = wss)) +
+  geom_point(size = 3) +  # Point size for visibility
+  geom_line(linewidth = 1) +  # Line thickness
+  labs(title = "Elbow Method for Determining Optimal Clusters",
+       x = "Number of clusters k",
+       y = "Total Within Sum of Square") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),  # Centered title
+    axis.title = element_text(size = 12),               # Axis title size
+    axis.text = element_text(size = 10)                 # Axis text size
+  )
+
+```
+
+\captionof{figure}{Elbow Method for Determining Optimal Clusters}
+
+\vspace{10pt}
+
+`r TAB`The **Silhouette Method** measures how similar each data point is to its assigned cluster compared to other clusters. The Silhouette score ranges from -1 to 1, with higher values indicating better clustering cohesion. In the silhouette plot, the peak score occurs at 2 clusters, suggesting this configuration achieves the best separation. However, the modest silhouette values imply only moderate cohesion, indicating that the clustering structure may not be particularly strong in this dataset.
+
+\vspace{10pt}
+
+`r TAB`Based on the consistency of both the Elbow and Silhouette methods, 2 clusters were selected as the final clustering solution. Although both methods support this choice, the limited clustering structure observed in the plots suggests that additional refinement may be needed to achieve a more nuanced grouping.
+
+
+```{r k-means optimal cluster silhouette, echo=FALSE}
+# Silhouette Method
+# fviz_nbclust(scaled_data_kmean, kmeans, method = "silhouette") + labs(title = "Silhouette Method for Determining Optimal Clusters")
+
+# Calculate average silhouette width for k = 2 to 10
+sil_widths <- sapply(2:10, function(k) {
+  km_res <- kmeans(scaled_data_kmean, centers = k, nstart = 20)
+  silhouette_widths <- silhouette(km_res$cluster, dist(scaled_data_kmean))
+  mean(silhouette_widths[, 3])  # Extract the average silhouette width
+})
+
+# Add a placeholder for k = 1 with silhouette width of 0
+sil_data <- data.frame(
+  k = 1:10,
+  sil_width = c(0, sil_widths)  # Add 0 for k = 1
+)
+
+# Plot the silhouette method results using ggplot2
+ggplot(sil_data, aes(x = k, y = sil_width)) +
+  geom_point(size = 3) +  # Larger points for visibility
+  geom_line(linewidth = 1) +   # Use linewidth for line thickness
+  geom_vline(xintercept = 2, linetype = "dashed", color = "blue") +  # Dashed vertical line
+  labs(title = "Silhouette Method for Determining Optimal Clusters",
+       x = "Number of clusters k",
+       y = "Average silhouette width") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
+    axis.title = element_text(size = 12),              # Adjust axis title size
+    axis.text = element_text(size = 10)                # Adjust axis text size
+  )
+```
+
+\captionof{figure}{Silhouette Method for Determining Optimal Clusters}
+
+\vspace{10pt}
+
+`r TAB`Based on the consistency of both the Elbow and Silhouette methods, 2 clusters were selected as the final clustering solution. Although both methods support this choice, the limited clustering structure observed in the plots suggests that additional refinement may be needed to achieve a more nuanced grouping.
+
+#### Unsupervised Evaluation
+
+\hspace{10pt}`r TAB`A **Silhouette Plot** is used to evaluate the quality and cohesion of the clusters generated by the K-means algorithm. The silhouette width measures how well each data point fits within its assigned cluster compared to neighboring clusters. Values close to 1 indicate that points are well-matched to their own cluster and poorly matched to other clusters, reflecting high-quality clustering. Values near 0 suggest ambiguity, as points lie roughly equidistant from multiple clusters.
+
+#### Evaluation Using Ground Truth Feature
+
+\hspace{10pt}`r TAB`To assess the alignment between economic clusters and real-world pandemic outcomes, we use the **COVID-19 death-to-case ratio** as a ground truth feature. This ratio, categorized into **"Lower"** (< 0.025) and **"Higher"** (> 0.025), serves as a proxy for pandemic resilience, allowing us to examine whether wealthier counties—identified through income-related clustering—exhibit lower mortality rates relative to confirmed cases.
+
+\vspace{5pt}
+
+  - This binary categorization simplifies interpretation, making it easier to analyze and compare mortality rates across income groups while maintaining consistency with the 2-cluster structure of the unsupervised analysis.
+  - Mortality rates, as measured by the death-to-case ratio, provide key public health insights into the severity of the pandemic’s impact, which may correlate with economic resilience.
+
+\hspace{10pt}`r TAB`A **contingency table** below compares the clusters generated by K-means with the death-to-case ratio categories, allowing us to evaluate if the clustering effectively captures differences in pandemic outcomes associated with economic conditions.
+
+
+
+```{r K-means ground truth, echo=FALSE}
+# Categorize COVID-19 death-to-case ratio into "Lower" and "Higher"
+data_clustered_1 <- data_clustered_1 %>%
+  mutate(death_category = cut(death_case_ratio, breaks = c(-Inf, 0.025, Inf), 
+                              labels = c("Lower", "Higher")))
+
+# Create a contingency table to compare clusters with death categories
+cluster_comparison <- table(data_clustered_1$cluster, data_clustered_1$death_category)
+
+# Display the contingency table in LaTeX format
+kable(cluster_comparison, format = "latex", caption = "Contingency Table of Clusters and Death Categories") %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 8, full_width = FALSE)
+
+```
+
+\vspace{10pt}
+
+#### Supervised Evaluation
+
+\hspace{10pt}`r TAB`This **K-Means clustering** analysis groups Texas counties into two clusters using the **death-to-case ratio** (COVID-19 deaths per confirmed case) and **income per capita**. Both features are scaled to ensure equal contributions to the clustering process, with a mean of zero and a standard deviation of one.
+
+\hspace{10pt}`r TAB`In contrast to the unsupervised approach, this clustering deliberately focuses on the economic conditions and pandemic outcomes to explore their relationship. The resulting clusters highlight counties with similar characteristics in terms of economic status and COVID-19 impact. Counties within the same cluster are more alike in these metrics than those in the other cluster.
+
+\vspace{10pt}
+
+
+```{r k-means clustering supervised, echo=FALSE}
+# Calculate death-to-case ratio as a feature for clustering
+data <- data %>%
+  mutate(death_case_ratio = deaths / confirmed_cases)
+
+# Select and scale the features for supervised clustering
+scaled_data_kmean_sup <- data %>%
+  select(death_case_ratio, income_per_capita) %>%
+  scale(center = TRUE, scale = TRUE)
+
+# Perform K-means clustering with 2 centers
+set.seed(123)  # Set seed for reproducibility
+kmeans_result <- kmeans(scaled_data_kmean_sup, centers = 2, nstart = 20)
+
+# Append cluster assignments to the original dataset
+data_clustered_2 <- data %>%
+  mutate(cluster = as.factor(kmeans_result$cluster))
+
+# Visualization of the supervised clustering
+fviz_cluster(kmeans_result, data = scaled_data_kmean_sup,
+             geom = "point", ellipse.type = "convex",
+             ggtheme = theme_minimal(), labelsize = 10) +
+  labs(title = "Supervised K-Means Clustering of Texas Counties",
+       x = "Death-to-Case Ratio (Scaled)", 
+       y = "Income per Capita (Scaled)")
+
+
+```
+
+\captionof{figure}{K-Means Clustering of Texas Counties Supervised}
+
+\vspace{10pt}
+
+`r TAB`A summary statistics table follows, which provides an in-depth breakdown of the average values of key features across the two clusters identified through K-Means clustering. The table includes the **average median income**, **income per capita**, **rent burden levels** (households spending over 50% and between 30-35% of income on rent), **confirmed COVID-19 cases**, **COVID-19 deaths**, and **total population** for each cluster. These statistics help in interpreting the composition and characteristics of the counties in each group, making it easier to assess economic and demographic differences.
+
+```{r supervised k-means summary statistics by cluster, echo=FALSE, fig.cap="Summary Statistics by Cluster Supervised"}
+# Calculate average values for each feature by cluster with adjusted column names
+cluster_summary <- data_clustered_2 %>%
+  group_by(cluster) %>%
+  summarise(
+    "Avg\nMedian\nIncome" = mean(median_income, na.rm = TRUE),
+    "Avg\nIncome\nper Capita" = mean(income_per_capita, na.rm = TRUE),
+    "Avg\nRent\n> 50%" = mean(rent_over_50_percent, na.rm = TRUE),
+    "Avg\nRent\n30-35%" = mean(rent_30_to_35_percent, na.rm = TRUE),
+    "Avg\nConfirmed\nCases" = mean(confirmed_cases, na.rm = TRUE),
+    "Avg\nDeaths" = mean(deaths, na.rm = TRUE),
+    "Avg\nDeath Case Ratio" = mean(death_case_ratio, na.rm = TRUE),
+    "Total\nPopulation" = mean(total_pop, na.rm = TRUE)
+  )
+
+# Display the summary statistics table with narrower columns and smaller font size
+kable(cluster_summary %>%
+      mutate(across(where(is.numeric), format_large_numbers)), 
+      format = "latex", caption = "Summary Statistics by Cluster", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(0:8, width = "1.25 cm")
+```
+
+\vspace{5pt}
+
+`r TAB`This clustering employs easily interpretable features—**death-to-case ratio** and **income per capita**—which offer a direct reflection of the economic conditions of each county. These features enhance the clusters' interpretability, providing valuable economic insight. The even distribution of data points between the two clusters results in a distinct separation of counties, which indicates that the clustering is a reliable representation of underlying economic and pandemic-related characteristics. The balanced representation of counties in Clusters 1 and 2 suggests that the grouping accurately captures the differences in economic resilience and pandemic outcomes.
+
+\vspace{5pt}
+
+  - **Average Median Income:** Cluster 1 has an average median income of $58,917.73, while Cluster 2 has an average of $43,937.72. This difference of approximately $15,000 highlights the substantial economic disparity between the two clusters.
+  - **Average Death-to-Case Ratio:** Cluster 1 has an average ratio of 0.0166, which is considerably lower than Cluster 2's average ratio of 0.0301. This suggests a significant relationship between economic status and the severity of pandemic outcomes, with higher incomes corresponding to better health outcomes.
+
+\vspace{5pt}
+
+`r TAB`The two K-Means clustering analyses (supervised and unsupervised) aim to classify Texas counties based on economic and pandemic-related factors, but they vary in terms of their precision, clarity, and ease of interpretation.
+
+\vspace{5pt}
+
+`r TAB`Within Clusters 1 and 2, counties are further grouped based on their income and rent burdens. There are three income groups: **Low** (Income per Capita < $25,000), **Middle** ($25,000 $\leq$ Income per Capita < $40,000), and **High** (Income per Capita > $40,000). Additionally, two rent burden groups are defined: **Low Rent Burden** (Rent over 50 Percent $\leq$ 5,000) and **High Rent Burden** (Rent over 50 Percent > 5,000). These categories provide a more nuanced comparison between the clusters and further illustrate the intersection of economic conditions and rent burdens across Texas counties.
+
+``` {r supervised grouping, echo = FALSE, message = FALSE, warning = FALSE}
+# Create income level groups within clusters
+data_clustered_2 <- data_clustered_2 %>%
+  mutate(
+    income_group = case_when(
+      income_per_capita < 25000 ~ "Low Income",
+      income_per_capita >= 25000 & income_per_capita < 40000 ~ "Middle Income",
+      income_per_capita >= 40000 ~ "High Income"
+    ),
+    
+    rent_burden_group = case_when(
+      rent_over_50_percent > 5000 ~ "High Rent Burden",
+      rent_over_50_percent <= 5000 ~ "Low Rent Burden"
+    )
+  )
+
+# Summarize statistics for subgroups within each cluster
+subgroup_summary <- data_clustered_2 %>%
+  group_by(cluster, income_group, rent_burden_group) %>%
+  summarise(
+    "Avg Median Income" = round(mean(median_income, na.rm = TRUE), 3),
+    "Avg Income per Capita" = round(mean(income_per_capita, na.rm = TRUE), 3),
+    "Avg Death Case Ratio" = round(mean(death_case_ratio, na.rm = TRUE), 3),
+    "Total Population" = round(mean(total_pop, na.rm = TRUE), 3)
+  )
+
+# Apply background color formatting to the income_group and rent_burden_group columns
+subgroup_summary <- subgroup_summary %>%
+  mutate(
+    income_group = cell_spec(income_group, "latex", 
+                             background = ifelse(income_group == "Low Income", "red", 
+                                                 ifelse(income_group == "Middle Income", "orange", "green"))),
+    rent_burden_group = cell_spec(rent_burden_group, "latex", 
+                                  background = ifelse(rent_burden_group == "High Rent Burden", "red", "green"))
+  )
+
+# Rename columns to avoid underscores for LaTeX compatibility
+colnames(subgroup_summary) <- c("Cluster", "Income Group", "Rent Burden Group", "Avg Median Income", 
+                                "Avg Income per Capita", "Avg Death Case Ratio", "Total Population")
+
+# Display the summary statistics table for subgroups with background color formatting
+kable(subgroup_summary %>%
+      mutate(across(where(is.numeric), format_large_numbers)), 
+      format = "latex", caption = "Summary Statistics by Subgroups Within Clusters", booktabs = TRUE, escape = FALSE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE) %>%
+  column_spec(1, width = "1cm") %>%            # Cluster column
+  column_spec(2, width = "2.5cm") %>%          # Income group column
+  column_spec(3, width = "2.5cm") %>%          # Rent burden group column
+  column_spec(4:7, width = "1.25cm")           # Other columns with rounded numeric values
+
+
+```
+
+**Cluster Analysis Summary**
+
+\vspace{5pt}
+
+**Cluster 1 Characteristics**
+  
+  - **Low Income & High Rent Burden:** With a median income of around 39,220 USD and income per capita of 17,059 USD, this subgroup has a death-to-case ratio of 0.0258, impacting a larger population (about 591,047). This suggests significant economic strain and relatively higher mortality rates in low-income, high-rent areas.
+  - **Low Income & Low Rent Burden:** This subgroup, with a slightly higher median income of 43,141 USD and income per capita of 21,126 USD, has a similar death case ratio of 0.0279 but a smaller population of around 23,915. This may indicate that smaller, lower-rent communities still faced pandemic challenges.
+  - **Middle Income & Low Rent Burden:** With the highest income levels in Cluster 1 (median of 48,879 USD and per capita 26,591 USD), this group exhibits the highest death-to-case ratio of 0.0419, implying that middle-income regions with low rent burden faced considerable health challenges potentially tied to other socioeconomic factors.
+
+\vspace{5pt}
+
+**Cluster 2 Characteristics**
+
+  - **Low Income & High Rent Burden:** Median income here is around 46,262 USD with an income per capita of 24,273 USD, and a relatively low death case ratio of 0.0157. Despite economic vulnerability, pandemic outcomes were better than comparable subgroups in Cluster 1.
+  - **Low Income & Low Rent Burden:** With a median income of 46,605 USD and income per capita of 23,835 USD, this subgroup has a low death case ratio of 0.0118, indicating some mitigation of low income impacts due to a reduced rent burden.
+  - **Middle Income & High Rent Burden:** This group, with a median income of 62,476 USD and per capita income of 30,880 USD, has a death case ratio of 0.0119. Economic stability here supports moderate resilience in pandemic outcomes.
+  - **Middle Income & Low Rent Burden:** Featuring a median income of 58,966 USD and per capita income of 29,439 USD, this group has a death-to-case ratio of 0.0183, suggesting that lower rent burden provides economic stability, though health outcomes still lag.
+  - **High Income & High Rent Burden:** This high-income group, with median income of 90,124 USD and per capita income of 41,609 USD, displays the lowest death case ratio (0.0075). It highlights that wealthier, high-rent areas managed the pandemic effectively, supported by substantial population density (approx. 914,075).
+
+\vspace{5pt}
+
+**Insights and Implications**
+
+`r TAB`Higher income levels in Cluster 2 are linked with significantly lower death case ratios, emphasizing that economic stability aids in pandemic resilience. Conversely, lower-income groups in both clusters tend to show higher mortality rates, with rent burden further intensifying economic strain. Even within high-rent subgroups, those with higher income levels (Cluster 2) fare better in health outcomes. Populous, high-income areas (e.g., high-income, high-rent burden in Cluster 2) show strong resilience, likely due to robust infrastructure and healthcare access.
+
+\vspace{5pt}
+
+`r TAB`In summary, wealthier regions, even under high rent burden, mitigated the pandemic’s impact more effectively. These findings underscore the importance of socioeconomic stability and housing in managing public health crises, guiding stakeholders toward resilient investment and targeted support for vulnerable areas.
+
+\vspace{5pt}
+
+
+**Visualizing K-Means Clustering Results**
+
+`r TAB`The following plot shows the K-Means clustering for Texas counties, categorized by Death Case Ratio and Income per Capita. Clusters are color-coded and outlined to reflect K-Means results, with points labeled according to income and rent burden groups for added economic context.
+
+\vspace{10pt}
+
+```{r supervised grouping on Cluster chart, echo = FALSE, message = FALSE, warning = FALSE}
+# Step 1: Create the K-Means boundaries without displaying the points
+cluster_boundaries <- fviz_cluster(
+  kmeans_result,
+  data = scaled_data_kmean_sup,
+  geom = "none",  # Hide points for boundary outline only
+  ellipse.type = "convex",  # Convex cluster boundaries
+  ggtheme = theme_minimal()
+)
+
+# Step 2: Add groupings to the boundary plot
+ggplot(data_clustered_2, aes(x = scaled_data_kmean_sup[, 1], y = scaled_data_kmean_sup[, 2])) +
+  cluster_boundaries$layers[[1]] +  # Overlay boundaries
+  geom_point(aes(color = income_group, shape = rent_burden_group), size = 3) +
+  labs(
+    title = "K-Means Clustering with Groupings",
+    x = "Death Case Ratio (Scaled)",
+    y = "Income per Capita (Scaled)"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Low Income" = "blue", "Middle Income" = "green", "High Income" = "red")) +
+  scale_shape_manual(values = c("High Rent Burden" = 18, "Low Rent Burden" = 8)) +  # Custom shapes
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  guides(color = guide_legend(title = "Income Group"), shape = guide_legend(title = "Rent Burden Group"))
+
+```
+\captionof{figure}{K-Means Clustering with Groupings}
+
+\vspace{10pt}
+
+**Cluster 1 (Red Region)**
+
+`r TAB`This cluster is distinguished by a higher Death Case Ratio and generally low to middle Income per Capita. The high density of blue points represents low-income areas, suggesting a concentration of economically vulnerable populations within this cluster. Green points, signifying middle-income groups, are present but less dense. Notably, this cluster includes both high and low rent burden groups, with star-shaped markers indicating high rent burden areas interspersed throughout. The combination of low income and high rent burden suggests compounded financial stress, which may contribute to poorer health outcomes within this cluster.
+
+\vspace{5pt}
+
+**Cluster 2 (Blue Region)**
+
+`r TAB`This cluster represents counties with a lower Death Case Ratio and generally higher Income per Capita. Red points, marking high-income areas, cluster toward the upper end of the income axis, aligning with wealthier regions that experienced better pandemic outcomes. Middle-income areas (green points) are also present, indicating that this cluster captures moderately affluent areas. These areas tended to fare better in terms of health resilience compared to Cluster 1. Even among the high rent burden subgroups in Cluster 2, the Death Case Ratios remain relatively low, suggesting that wealthier regions could leverage resources to mitigate pandemic impacts despite housing cost pressures.
+
+\vspace{5pt}
+
+`r TAB`Overall, the clustering results suggest a strong correlation between income level and health resilience. Higher Income per Capita aligns with lower Death Case Ratios, likely due to better access to healthcare, infrastructure, and resources. In contrast, low-income areas, particularly those burdened by high rent, appear more vulnerable. Middle-income areas are present in both clusters, indicating that pandemic outcomes for this group varied widely and may have been influenced by factors beyond income alone, such as healthcare access, population density, and social support networks.
+
+\vspace{10pt}
+
+
+
+The following table presents the purity scores for the two different subgroup classifications: Income Groups and Rent Burden Groups. 
+
+```{r purity_calculations, echo = FALSE, warning = FALSE, message = FALSE}
+# Calculate purity score function remains the same
+calculate_purity <- function(cluster_labels, true_labels) {
+  data_labels <- data.frame(cluster = cluster_labels, true_label = true_labels)
+  
+  majority_vote <- data_labels %>%
+    group_by(cluster) %>%
+    summarise(
+      majority_label = names(sort(table(true_label), decreasing = TRUE)[1]),
+      correct_count = max(table(true_label))
+    )
+  
+  total_correct <- sum(majority_vote$correct_count)
+  purity_score <- total_correct / nrow(data_labels)
+  return(purity_score)
+}
+
+# Compute purity scores for income and rent burden groups
+purity_income <- calculate_purity(data_clustered_2$cluster, data_clustered_2$income_group)
+purity_rent_burden <- calculate_purity(data_clustered_2$cluster, data_clustered_2$rent_burden_group)
+
+# Create a data frame for the purity scores, rounding to three decimals
+purity_scores_df <- data.frame(
+  Grouping = c("Income Groups", "Rent Burden Groups"),
+  `Purity Score` = round(c(purity_income, purity_rent_burden), 3)
+)
+
+# Display the table using kable with enhanced formatting
+kable(purity_scores_df, format = "latex", caption = "Purity Scores by Grouping", booktabs = TRUE, align = "c") %>%
+  kable_styling(full_width = FALSE, font_size = 10) %>%
+  column_spec(1, bold = TRUE, width = "4cm") %>%  # Bold Grouping column for emphasis
+  column_spec(2, width = "3cm")                   # Set width for Purity Score column
+
+```
+
+`r TAB`Purity is a metric that evaluates clustering quality by measuring how well clusters align with predefined classes. A higher purity score indicates more homogeneous clusters.
+
+\vspace{5pt}
+
+  - **Income:** The purity score for income is 0.87, meaning that 87% of data points within clusters are correctly grouped by income level (Low, Middle, or High). This high score suggests that income is a strong factor in clustering, although some overlap exists, indicating that income alone does not fully define the cluster structure.
+  
+  - **Rent Burden:** With a slightly higher purity score of 0.91, rent burden appears to be an even stronger factor, grouping counties more distinctly by housing affordability stress (High or Low Rent Burden). This suggests that rent burden may be a clearer differentiator in the clustering model.
+
+\vspace{5pt}
+
+`r TAB`Overall, the high purity scores indicate that K-Means clustering captures meaningful differences among counties. While both income and rent burden contribute to cluster distinctions, rent burden seems particularly impactful. This insight is valuable for stakeholders focused on economic resilience and addressing housing stress.
+
+
+\newpage
+
+## Hierarchical Clustering
+
+\vspace{5pt}
+
+`r TAB`We will perform hierarchical clustering on the Texas counties dataset to identify patterns and group similar counties based on the selected features. Hierarchical clustering does not require us to specify the number of clusters beforehand and provides a dendrogram that helps visualize the cluster formation at various levels.
+
+### Hierarchical Clustering Using Ward's Method
+#### Feature Selection and Data Preparation
+
+\(\vspace{5pt}\)
+
+`r TAB`We will use the same numerical features as in the K-means clustering for direct comparison:
+
+  - Median Income
+  - Income per Capita
+  - Rent > 50% Income
+  - Rent 30-35% Income
+  - Income <10,000 USD
+  - Income 50,000-59,999 USD
+  - Income 100,000-124,999 USD
+  - Total Population
+
+`r TAB` We will standardize these features to ensure equal contribution to the clustering process.
+```{r, echo = FALSE, eval = TRUE}
+# Scale the numerical features
+scaled_data_hc <- scale(numerical_features)
+
+# Calculate the distance matrix
+dist_matrix <- dist(scaled_data_hc, method = "euclidean")
+
+# Perform hierarchical clustering using Ward's method
+hc_ward <- hclust(dist_matrix, method = "ward.D2")
+
+```
+
+#### Computing the Distance Matrix
+
+We compute the distance matrix using Euclidean distance, which measures the straight-line distance between points in the feature space.
+
+```{r, echo = FALSE, eval = TRUE}
+
+
+# Plot the dendrogram with improved display options
+plot(hc_ward, cex = 0.5, hang = -1, 
+     main = "Dendrogram of Texas Counties Using Ward's Method",
+     xlab = "", sub = "", las = 2)
+
+# Optionally, add rectangles around major clusters
+rect.hclust(hc_ward, k = 4, border = 2:5)
+
+```
+\captionof{figure}{Dendrogram of Texas Counties Using Ward's Method}
+
+
+```{r, echo = FALSE, eval = TRUE}
+# Set seed for reproducibility
+set.seed(123)
+
+# Define the clustering function
+hc_clustering <- function(x, k) {
+  # Compute the distance matrix
+  dist_matrix <- dist(x)
+  # Perform hierarchical clustering
+  hc <- hclust(dist_matrix, method = "ward.D2")
+  # Get cluster assignments
+  cluster_assignments <- cutree(hc, k)
+  # Return an object with a 'cluster' component
+  return(list(cluster = cluster_assignments))
+}
+
+# Compute the gap statistic
+gap_stat <- clusGap(scaled_data_hc, FUNcluster = hc_clustering, K.max = 10, B = 50)
+
+# Plot the gap statistic
+fviz_gap_stat(gap_stat) + theme_minimal()
+```
+\captionof{figure}{Gap Statistic for Determining Optimal Clusters}
+
+
+```{r, echo=FALSE}
+
+# Cut the dendrogram to get cluster assignments (e.g., 4 clusters)
+cluster_assignments <- cutree(hc_ward, k = 3)
+
+# Use PCA to reduce data to 2 dimensions for visualization
+pca_results <- prcomp(scaled_data_hc)
+
+# Create a data frame for plotting, including county names if available
+plot_data <- data.frame(
+  PC1 = pca_results$x[, 1], 
+  PC2 = pca_results$x[, 2],
+  Cluster = as.factor(cluster_assignments)
+  # Uncomment the following line if you have a column for county names
+  # County = county_names
+)
+
+# Calculate the number of counties in each cluster for the legend
+cluster_counts <- as.data.frame(table(cluster_assignments))
+cluster_counts$label <- paste("Cluster", cluster_counts$cluster_assignments, "(n =", cluster_counts$Freq, ")")
+
+# Apply log scale to one of the PCA components if necessary
+plot_data$PC1 <- log10(plot_data$PC1 + abs(min(plot_data$PC1)) + 1)  # Shift values to handle non-positive values if needed
+
+ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster)) +
+  geom_point(size = 3, alpha = 0.8) +
+  labs(
+    title = "Hierarchical Clustering of Texas Counties Using Log-Scaled PCA",
+    subtitle = "PC1 is log-transformed for better spread of points",
+    x = "Log(Principal Component 1)",
+    y = "Principal Component 2",
+    color = "Cluster"
+  ) +
+  scale_color_manual(
+    values = c("red", "green", "blue", "purple"),
+    labels = cluster_counts$label
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8)
+  )
+```
+
+```{r}
+# Calculate silhouette scores
+silhouette_scores <- silhouette(cluster_assignments, dist_matrix)
+
+# Plot silhouette scores
+fviz_silhouette(silhouette_scores) +
+  labs(title = "Silhouette Plot of Clustering",
+       x = "Silhouette Width",
+       y = "Cluster") +
+  theme_minimal()
+```
+
+```{r}
+
+# Calculate Davies-Bouldin Index
+db_index <- intCriteria(as.matrix(scaled_data_hc), cluster_assignments, "Davies_Bouldin")
+
+print(db_index$davies_bouldin)
+
+```
+
+
+
+
+```{r, echo = FALSE, eval = TRUE}
+# Load COVID-19 case data
+COVID_19_cases_TX <- read.csv("data/COVID-19_cases_TX.csv") %>%
+  filter(county_name != "Statewide Unallocated")  # Remove unallocated data
+
+census_data <- get_acs(
+  geography = "county",
+  variables = c(total_population = "B01003_001"),
+  state = "TX",
+  year = 2020,
+  survey = "acs5"
+) %>%
+  select(NAME, variable, estimate) %>%
+  separate(NAME, into = c("county_name", "state"), sep = ", ") %>%
+  pivot_wider(names_from = "variable", values_from = estimate)
+
+# Aggregate COVID-19 data and merge with census population data
+county_data <- COVID_19_cases_TX %>%
+  group_by(county_name) %>%
+  summarize(
+    total_deaths = max(deaths),
+    total_cases = max(confirmed_cases)
+  ) %>%
+  left_join(census_data, by = "county_name") %>%
+  mutate(
+    cases_per_k = (total_cases / total_population) * 1000,
+    deaths_per_k = (total_deaths / total_population) * 1000
+  ) %>%
+  select(-state)  # Remove unwanted "state" feature
+
+# Retrieve county numbers and area in square miles from the Census API
+county_names_to_numbers_url <- "https://api.census.gov/data/2023/geoinfo?get=NAME&for=county:*&in=state:48"
+county_area_url <- "https://api.census.gov/data/2023/geoinfo?get=AREALAND_SQMI&for=county:*&in=state:48"
+
+# API call for county names and numbers
+county_names_response <- httr::GET(county_names_to_numbers_url)
+county_names_data <- content(county_names_response)
+county_names_df <- as.data.frame(do.call(rbind, county_names_data)) %>%
+  slice(-1) %>%
+  rename(NAME = V1, state = V2, county_num = V3) %>%
+  separate(NAME, into = c("county_name", "STATE NAME"), sep = ",") %>%
+  select(county_name, county_num)
+
+# API call for area in square miles
+county_area_response <- httr::GET(county_area_url)
+county_area_data <- content(county_area_response)
+county_area_df <- as.data.frame(do.call(rbind, county_area_data)) %>%
+  slice(-1) %>%
+  rename(area_sqmiles = V1, county_num = V3) %>%
+  mutate(area_sqmiles = as.numeric(area_sqmiles)) %>%
+  left_join(county_names_df, by = "county_num") %>%
+  select(county_name, area_sqmiles)
+
+# Merge area data with COVID-19 and population data, and calculate population density
+county_data_with_density <- county_data %>%
+  left_join(county_area_df, by = "county_name") %>%
+  mutate(pop_density = total_population / area_sqmiles)
+
+# Scale the numeric features for further analysis
+county_data_scaled <- county_data_with_density %>%
+  mutate(across(where(is.numeric), ~ as.numeric(scale(.))))
+
+# View a sample of the cleaned dataset
+head(county_data_scaled)
+
+```
+
+
+\newpage
+
+# Exceptional Work
+
+```{r, echo=FALSE, eval = TRUE}
+
+# Transform population density and scale the data
+# Assume county_data_scaled is your original dataset with relevant columns
+county_data_scaled <- county_data_scaled %>%
+  mutate(
+    log_pop_density = log1p(pop_density)  # Apply log transformation to handle zeros
+  ) %>%
+  na.omit()  # Remove rows with NA values
+
+# Convert factor columns to numeric (if any) and keep only numeric columns
+county_data_scaled <- county_data_scaled %>%
+  mutate_if(is.factor, as.numeric) %>%   # Convert factor columns to numeric
+  select_if(is.numeric)                  # Keep only numeric columns
+
+# Convert to numeric matrix for compatibility with clustering algorithms
+county_data_matrix <- as.matrix(county_data_scaled)
+
+# Check if the matrix conversion was successful
+if (!is.numeric(county_data_matrix)) {
+  stop("Data conversion to numeric matrix failed. Ensure all columns are numeric.")
+}
+
+# 1. Gaussian Mixture Model (GMM) Clustering
+gmm_result <- Mclust(county_data_matrix, G = 3)  # Assume 3 clusters
+county_data_scaled$gmm_cluster <- as.factor(gmm_result$classification)
+
+# GMM Clustering Visualization
+ggplot(county_data_scaled, aes(x = log_pop_density, y = deaths_per_k, color = gmm_cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  scale_color_manual(values = c("blue", "red", "green"), na.value = "black") +
+  labs(
+    title = "GMM Clustering on Log-Transformed Population Density & Mortality Rate",
+    x = "Log(Population Density + 1)",
+    y = "Deaths per 1k Population",
+    color = "Cluster"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# 2. HDBSCAN Clustering
+hdbscan_result <- hdbscan(county_data_matrix, minPts = 5)
+county_data_scaled$hdbscan_cluster <- as.factor(ifelse(hdbscan_result$cluster == 0, NA, hdbscan_result$cluster))
+
+# HDBSCAN Clustering Visualization with Custom Colors
+ggplot(county_data_scaled, aes(x = log_pop_density, y = deaths_per_k, color = hdbscan_cluster)) +
+  geom_point(alpha = 0.7, size = 2) +
+  scale_color_manual(values = c("red", "blue", "green", "purple", "orange", "brown", "black"), na.value = "grey") +
+  labs(
+    title = "HDBSCAN Clustering on Log-Transformed Population Density & Mortality Rate",
+    x = "Log(Population Density + 1)",
+    y = "Deaths per 1k Population",
+    color = "Cluster"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 10),
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+
+\newpage
+
+# Recommendations
+*Discuss how the model can be interpreted and the recommendations based on the findings. Explain the utility for the stakeholders.*
+
+After analyzing our model's results, if a client has an interest in opening a business in an affluent, high land population density, and high COVID-19 performing county in Texas, they should consider the following counties.
+
+After taking cluster "2" in the second layer K-means cluster, and sorting from descending order according to population density the three top counties are:
+
+```{r, echo=FALSE, eval = FALSE}
+top_3_kmeans <- summary_data_kmeans %>% filter(matias_kmeans == 2) %>% rename(layer_2_kmeans = "matias_kmeans") %>% arrange(desc(pop_density)) %>% select(county_name)
+
+# Display the summary statistics table with narrower columns and smaller font size
+kable(top_3_kmeans, format = "latex", caption = "Second Layer K-means Clustering Top 3 Counties", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE)
+```
+
+The three results in cluster "2" for the second layer hierarchical clustering were:
+
+```{r, echo=FALSE, eval = FALSE}
+top3_hierarchical <- summary_data_hierarchical %>% filter(matias_hierarchical == 2) %>% rename(layer_2_hierarchical = "matias_hierarchical") %>% arrange(desc(pop_density)) %>% select(county_name)
+
+# Display the summary statistics table with narrower columns and smaller font size
+kable(top3_hierarchical, format = "latex", caption = "Second Layer K-means Clustering Top 3 Counties", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"), font_size = 7, full_width = FALSE)
+```
+
+
+*Describe your results. What recommendations can you formulate based on the clustering results? How do these recommendations relate to the ones already presented in report 1? What findings are the most interesting to your stakeholder?*
+
+\newpage
+
+# Conclusion
+*Summarize the key findings and their relevance to the initial questions.*
+
+\newpage
+
+# List of References
+[1] “Covid-19,” NFID, [https://www.nfid.org/infectious-diseases/covid-19/](https://www.nfid.org/infectious-diseases/covid-19/) (accessed Oct. 8, 2024).
+
+[2] Northwestern Medicine, “Covid-19 pandemic timeline,” Northwestern Medicine, [https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline](https://www.nm.org/healthbeat/medical-advances/new-therapies-and-drug-trials/covid-19-pandemic-timeline) (accessed Oct. 8, 2024).
+
+[3] “10.1 - hierarchical clustering,” 10.1 - Hierarchical Clustering | STAT 555, [https://online.stat.psu.edu/stat555/node/85/#:~:text=For%20most%20common%20hierarchical%20clustering,when%20they%20are%20perfectly%20correlated.](https://online.stat.psu.edu/stat555/node/85/#:~:text=For%20most%20common%20hierarchical%20clustering,when%20they%20are%20perfectly%20correlated.) (accessed Oct. 23, 2024). 
+
+[4] “Manhattan distance,” Wikipedia, [https://simple.wikipedia.org/wiki/Manhattan_distance](https://simple.wikipedia.org/wiki/Manhattan_distance) (accessed Oct. 23, 2024). 
+
+[5] A. Jain, “Normalization and standardization of Data,” Medium,  
+[https://medium.com/@abhishekjainindore24/normalization-and-standardization-of-data-408810a88307](https://medium.com/@abhishekjainindore24/normalization-and-standardization-of-data-408810a88307) (accessed Oct. 23, 2024).
+
+\newpage
+
+# Appendix
+*Include code snippets, extended tables, or other supplementary information.*
+
+## Student Contributions
+Olivia Hofmann
+
+  - Format/Organization of Report (Lead)
+  - Problem Description (Lead)
+  - Income Data in Texas Counties (Lead)
+  - Exceptional Work (Supporter)
+  
+Mike Perkins
+
+  - Format/Organization of Report (Supporter)
+  - Exceptional Work (Lead)
+
+## Extra Graduate Student Work
+*For each graduate students: Describe your exceptional work in a few sentences.*
+
+The graduate students in this group are Olivia Hofmann and Mike Perkins. Both graduate students worked together to ensure the report was held to a high standard and complete the exceptional work clustering. 
