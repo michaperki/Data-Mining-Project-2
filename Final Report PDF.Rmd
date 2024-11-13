@@ -652,9 +652,7 @@ The Hierarchical clustering dendrogram, Figure 8, provides a visual representati
 
 ```{r hierarchical clustering, echo=FALSE, warning=FALSE}
 # Scale data for hierarchical clustering (excluding county_name)
-scaled_data_hc <- data %>%
-  select(-county_name) %>%
-  scale()
+scaled_data_hc <- scale(numerical_features)
 
 # Calculate distance matrix and perform complete linkage clustering
 distance_matrix <- dist(scaled_data_hc, method = "euclidean")
@@ -744,16 +742,33 @@ The Silhouette Method, Figure 10, evaluates how well each data point fits within
 \vspace{10pt}
 
 ```{r heirarchical optimal cluster silhouette, echo=FALSE}
-# Silhouette Method
-# Assign clusters with cutree (for k = 2 to 6 clusters)
-silhouette_scores <- map(2:6, function(k) {
+# Calculate average silhouette width for k = 2 to 10
+sil_widths <- sapply(2:10, function(k) {
   clusters <- cutree(hc_complete, k = k)
-  silhouette(clusters, distance_matrix)
+  silhouette_obj <- silhouette(clusters, distance_matrix)
+  mean(silhouette_obj[, 3])  # Extract the average silhouette width
 })
 
-# Visualize the silhouette scores for different numbers of clusters
-fviz_nbclust(scaled_data_hc, FUN = hcut, method = "silhouette") +
-  labs(title = "Silhouette Method for Hierarchical Clustering")
+# Add a placeholder for k = 1 with silhouette width of 0
+sil_data <- data.frame(
+  k = 1:10,
+  sil_width = c(0, sil_widths)  # Add 0 for k = 1
+)
+
+# Plot the silhouette method results using ggplot2
+ggplot(sil_data, aes(x = k, y = sil_width)) +
+  geom_point(size = 3) +  # Larger points for visibility
+  geom_line(linewidth = 1) +  # Use linewidth for line thickness
+  geom_vline(xintercept = 2, linetype = "dashed", color = "blue") +  # Dashed vertical line
+  labs(title = "Silhouette Method for Determining Optimal Clusters",
+       x = "Number of clusters k",
+       y = "Average silhouette width") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and adjust title size
+    axis.title = element_text(size = 12),              # Adjust axis title size
+    axis.text = element_text(size = 10)                # Adjust axis text size
+  )
 ```
 \captionof{figure}{Silhouette Method for Hierarchical Clustering}
 
