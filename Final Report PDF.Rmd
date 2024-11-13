@@ -1248,7 +1248,8 @@ knitr::kable(
 
 ```
  
-The clusterings appear well-defined. Clusters 1 and 3 have lower death case ratios than Cluster 2, on average. Cluster 2 represents counties within a relatively small range of intermediate population sizes that experienced moderate to high death ratios. These are notable for our analysis as these counties are unlikely to demonstrate the heath resilience desired by our stakeholder. 
+The clusters are loosely separated. Clusters 1 and 3 have lower death case ratios than Cluster 2, on average. Cluster 2 represents counties within a relatively small range of intermediate population sizes that experienced moderate to high death ratios. These are notable for our analysis as these counties are unlikely to demonstrate the heath resilience desired by our stakeholder. 
+
 
 Based on the silhouette widths, we note that none of these clusters is particularly well-defined. Even the most well-defined cluster (2) exhibits a measly 0.177, indicating low cohesion in the cluster. These silhouette scores suggest suboptimal clustering, indicating that the selected features may not be able to provide the necessary information for distinguishing between counties without additional information. 
  
